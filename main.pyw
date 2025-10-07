@@ -54,7 +54,7 @@ class Ventana:
     def crear_boton(self, texto, comando, fila, columna, **kwargs):
         interfaz = cimiento.interfaz()
         if interfaz == True:
-            ttk.Button(self.ventana, text=texto, command=comando, **kwargs).grid(row=fila, column=columna, sticky="news")
+            ttk.Button(self.ventana, text=texto, command=comando, **kwargs).grid(row=fila, column=columna, sticky="news", padx=10, pady=10)
 
     def crear_etiqueta(self, texto, fila, columna, **kwargs):
         ttk.Label(self.ventana, text=texto, **kwargs).grid(row=fila, column=columna, padx=5, pady=5)
@@ -78,12 +78,35 @@ class VentanaPrincipal(Ventana):
     def __init__(self):
         super().__init__("Principal", 500, 400 , 2)
         self.crear_etiqueta(" ", 0, 0)
-        #self.crear_boton("Archivos Excel", lambda: VentanaExcel(self.ventana), 1, 1, background="lightblue")
-        #self.crear_boton("Funciones en Sphinx", lambda: VentanaSphinx(self.ventana), 2, 1, background="lightblue")
-        self.crear_etiqueta(" ", 3, 2)
-        self.crear_boton("Configuración", lambda: VentanaConfiguracion(self.ventana), 4, 1)
+        self.crear_boton("Clientes", lambda: VentanaClientes(self.ventana), 1, 1)
+        self.crear_boton("Insumos", lambda: VentanaInsumos(self.ventana), 1, 3)
+        self.crear_etiqueta(" ", 3, 0)
+        self.crear_boton("Configuración", lambda: VentanaConfiguracion(self.ventana), 4, 2)
         
+        self.crear_etiqueta(" ", 5, 0)
+        self.crear_boton("Cerrar", self.destroy, 6, 2)
+        self.crear_etiqueta(" ", 7, 4)
+        self.expandir_columnas(5)
+
+class VentanaClientes(Ventana):
+    def __init__(self, ventana_padre):
+        super().__init__("Configuraciones",500, 400 , 2)
+        self.crear_etiqueta(" ", 0, 0)
+        self.crear_etiqueta("Cliente: ", 0, 1)
+        self.crear_etiqueta("RUT: ", 1, 1)
+        self.crear_etiqueta("Dirección: ", 2, 1)
+        self.crear_etiqueta("Teléfono: ", 3, 1)
+        self.crear_etiqueta("Correo: ", 4, 1)
         self.crear_etiqueta(" ", 5, 2)
+        self.crear_boton("Cerrar", self.destroy, 6, 1)
+        self.crear_etiqueta(" ", 7, 2)
+        self.expandir_columnas(3)
+
+class VentanaInsumos(Ventana):
+    def __init__(self, ventana_padre):
+        super().__init__("Configuraciones",500, 400 , 2)
+        self.crear_etiqueta(" ", 0, 0)
+        self.crear_etiqueta("Descripcion: ", 0, 1)
         self.crear_boton("Cerrar", self.destroy, 6, 1)
         self.crear_etiqueta(" ", 7, 2)
         self.expandir_columnas(3)
