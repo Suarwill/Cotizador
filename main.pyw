@@ -44,12 +44,22 @@ from funciones_base import cimiento
 
 # ---------- "Visualizaciones" ----------
 class Ventana:
-    def __init__(self, titulo, width, height,posicion):
-        self.ventana = tk.Tk()
+    def __init__(self, titulo, width, height, posicion, ventana_padre=None):
+        if ventana_padre:
+            self.ventana = tk.Toplevel(ventana_padre)
+        else:
+            self.ventana = tk.Tk()
+            sv_ttk.set_theme("light")
+
+            style = ttk.Style()
+            style.configure('TButton', font=('Arial', 12), anchor='center')
+            style.configure('TLabel', font=('Arial', 14))
+            Style.configure('TEntry', font=('Arial', 12), anchor='center')
+
+
         load_dotenv(override=True)
-        sv_ttk.set_theme("light")
         self.ventana.title(titulo)
-        self.ventana.geometry(f"{width}x{height}+{int((self.ventana.winfo_screenwidth()-width)/posicion)}+{int((self.ventana.winfo_screenheight()-height)/posicion)}")
+        self.ventana.geometry(f"{width}x{height}+{int((self.ventana.winfo_screenwidth() - width) / posicion)}+{int((self.ventana.winfo_screenheight() - height) / posicion)}")
 
     def crear_boton(self, texto, comando, fila, columna, **kwargs):
         interfaz = cimiento.interfaz()
@@ -76,7 +86,7 @@ class Ventana:
 
 class VentanaPrincipal(Ventana):
     def __init__(self):
-        super().__init__("Principal", 500, 400 , 2)
+        super().__init__("Principal", 500, 400, 2)
         self.crear_etiqueta(" ", 0, 0)
         self.crear_boton("Clientes", lambda: VentanaClientes(self.ventana), 1, 1)
         self.crear_boton("Insumos", lambda: VentanaInsumos(self.ventana), 1, 3)
@@ -90,21 +100,38 @@ class VentanaPrincipal(Ventana):
 
 class VentanaClientes(Ventana):
     def __init__(self, ventana_padre):
-        super().__init__("Configuraciones",500, 400 , 2)
+        super().__init__("Clientes", 500, 400, 2, ventana_padre)
         self.crear_etiqueta(" ", 0, 0)
         self.crear_etiqueta("Cliente: ", 0, 1)
+        self.datacliente =      self.crear_entrada_texto(0, 2, 30, 2)
         self.crear_etiqueta("RUT: ", 1, 1)
+        self.datarut =          self.crear_entrada_texto(1, 2, 30, 2)
         self.crear_etiqueta("Dirección: ", 2, 1)
+        self.datadireccion =    self.crear_entrada_texto(2, 2, 30, 2)
         self.crear_etiqueta("Teléfono: ", 3, 1)
+        self.datatelefono =     self.crear_entrada_texto(3, 2, 30, 2)
         self.crear_etiqueta("Correo: ", 4, 1)
-        self.crear_etiqueta(" ", 5, 2)
-        self.crear_boton("Cerrar", self.destroy, 6, 1)
+        self.datacorreo =       self.crear_entrada_texto(4, 2, 30, 2)
+        self.crear_etiqueta(" ", 5, 3)
+
+        self.crear_boton("Guardar", self.guardar, 0, 3)
+        self.crear_boton("Buscar", self.buscar, 1, 3)
+        self.crear_boton("Cerrar", self.destroy, 2, 3)
+
+
         self.crear_etiqueta(" ", 7, 2)
         self.expandir_columnas(3)
 
+    def guardar(self):
+        pass
+
+    def buscar(self):
+        pass
+
+
 class VentanaInsumos(Ventana):
     def __init__(self, ventana_padre):
-        super().__init__("Configuraciones",500, 400 , 2)
+        super().__init__("Insumos", 500, 400, 2, ventana_padre)
         self.crear_etiqueta(" ", 0, 0)
         self.crear_etiqueta("Descripcion: ", 0, 1)
         self.crear_boton("Cerrar", self.destroy, 6, 1)
@@ -113,7 +140,7 @@ class VentanaInsumos(Ventana):
 
 class VentanaConfiguracion(Ventana):
     def __init__(self, ventana_padre):
-        super().__init__("Configuraciones",500, 200 , 2)
+        super().__init__("Configuraciones", 500, 200, 2, ventana_padre)
         load_dotenv(override=True)
 
         self.crear_etiqueta(" ", 0, 0)
@@ -137,7 +164,6 @@ class VentanaConfiguracion(Ventana):
 
         self.crear_etiqueta(" ", 0, 3)
         self.expandir_columnas(4)
-        self.iniciar()
 
     def guardar(self):
         user = self.userdata.get("1.0", tk.END).strip()
