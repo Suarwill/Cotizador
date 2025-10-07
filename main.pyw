@@ -54,7 +54,7 @@ class Ventana:
             style = ttk.Style()
             style.configure('TButton', font=('Arial', 12), anchor='center')
             style.configure('TLabel', font=('Arial', 14))
-            Style.configure('TEntry', font=('Arial', 12), anchor='center')
+            style.configure('TEntry', font=('Arial', 12), anchor='center')
 
 
         load_dotenv(override=True)
