@@ -1,0 +1,5 @@
+# Caché
+/__pycache__
+
+# Privado
+.env

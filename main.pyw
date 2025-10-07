@@ -76,7 +76,7 @@ class Ventana:
 
 class VentanaPrincipal(Ventana):
     def __init__(self):
-        super().__init__("Principal", 500, 400,2)
+        super().__init__("Principal", 500, 400 , 2)
         self.crear_etiqueta(" ", 0, 0)
         #self.crear_boton("Archivos Excel", lambda: VentanaExcel(self.ventana), 1, 1, background="lightblue")
         #self.crear_boton("Funciones en Sphinx", lambda: VentanaSphinx(self.ventana), 2, 1, background="lightblue")
@@ -90,7 +90,7 @@ class VentanaPrincipal(Ventana):
 
 class VentanaConfiguracion(Ventana):
     def __init__(self, ventana_padre):
-        super().__init__("Configuraciones",500, 200,2)
+        super().__init__("Configuraciones",500, 200 , 2)
         load_dotenv(override=True)
 
         self.crear_etiqueta(" ", 0, 0)
