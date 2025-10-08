@@ -84,9 +84,46 @@ class cimiento:
                     chrome = "%APPDATA%/Google/Chrome"
                     env_file.write("USERNAME=\nPASSWORD=\nCARPETA=\n")
                     env_file.write(f"PERFIL_CHROME={chrome}")
-                print("Archivo env. creado!")
-        except:
-            print("Archivo env. ya existe!")
+                print("Archivo .env creado!")
+        except Exception as e:
+            print(f"Error al crear .env: {e}")
+
+        try:
+            data_dir = "data"
+            if not os.path.exists(data_dir):
+                os.makedirs(data_dir)
+                print(f"Directorio '{data_dir}' creado!")
+
+            cliente_csv_path = os.path.join(data_dir, "data_cliente.csv")
+            if not os.path.exists(cliente_csv_path):
+                with open(cliente_csv_path, "w", newline="", encoding='utf-8') as csv_file:
+                    writer = csv.writer(csv_file)
+                    writer.writerow(["Nombre", "RUT", "Direccion", "Telefono", "Correo"])
+                print("Archivo Clientes creado!")
+
+            productos_csv_path = os.path.join(data_dir, "data_productos.csv")
+            if not os.path.exists(productos_csv_path):
+                with open(productos_csv_path, "w", newline="", encoding='utf-8') as csv_file:
+                    writer = csv.writer(csv_file)
+                    writer.writerow(["Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "Costo", "Precio"])
+                print("Archivo Productos creado!")
+
+            cotizaciones_csv_path = os.path.join(data_dir, "data_cotizaciones.csv")
+            if not os.path.exists(cotizaciones_csv_path):
+                with open(cotizaciones_csv_path, "w", newline="", encoding='utf-8') as csv_file:
+                    writer = csv.writer(csv_file)
+                    writer.writerow(["Fecha", "Estado", "Cliente", "Precio"])
+                print("Archivo Cotizaciones creado!")
+
+            cotizaciones_detalle_csv_path = os.path.join(data_dir, "data_cotizaciones_detalle.csv")
+            if not os.path.exists(cotizaciones_detalle_csv_path):
+                with open(cotizaciones_detalle_csv_path, "w", newline="", encoding='utf-8') as csv_file:
+                    writer = csv.writer(csv_file)
+                    writer.writerow(["Fecha", "Estado", "Cliente", "Precio"])
+                print("Archivo Cotizaciones Detalle creado!")
+            
+        except Exception as e:
+            print(f"Error al crear entorno de datos: {e}")
 
         return "Continuando..."
 
