@@ -34,6 +34,7 @@ libSetup('tkinter','warnings','pandas','dotenv','requests',('bs4', 'python3-bs4'
 
 import os
 import csv
+from datetime import datetime
 from dotenv import load_dotenv, set_key
 
 import tkinter as tk
@@ -239,7 +240,7 @@ class VentanaSeleccionarCliente(Ventana):
         try:
             with open(ruta_archivo, 'r', newline='', encoding='utf-8') as f:
                 reader = csv.reader(f)
-                next(reader)  # Omitir la cabecera
+                next(reader)
                 for row in reader:
                     self.tree.insert("", tk.END, values=row)
         except FileNotFoundError:
@@ -257,12 +258,228 @@ class VentanaSeleccionarCliente(Ventana):
 class VentanaCrearCotizacion(ttk.Frame, VistaBase):
     def __init__(self, parent):
         super().__init__(parent)
-        self.crear_etiqueta(" ", 0, 0)
+        self.cliente_seleccionado = None
+        self.insumo_seleccionado = None
+        self.total_cotizacion = 0.0
+
+        # --- Sección Cliente ---
+        cliente_frame = ttk.LabelFrame(self, text="Cliente")
+        cliente_frame.grid(row=0, column=0, columnspan=4, sticky="ew", padx=10, pady=5)
+        self.lbl_cliente = ttk.Label(cliente_frame, text="Ningún cliente seleccionado")
+        self.lbl_cliente.pack(side="left", padx=10, pady=5)
+        btn_buscar_cliente = ttk.Button(cliente_frame, text="Buscar Cliente", command=self.buscar_cliente)
+        btn_buscar_cliente.pack(side="right", padx=10)
+
+        # --- Sección Insumos ---
+        insumo_frame = ttk.LabelFrame(self, text="Añadir Insumo")
+        insumo_frame.grid(row=1, column=0, columnspan=4, sticky="ew", padx=10, pady=5)
+        
+        self.lbl_insumo = ttk.Label(insumo_frame, text="Ningún insumo seleccionado", width=40)
+        self.lbl_insumo.grid(row=0, column=0, padx=5, pady=5)
+        btn_buscar_insumo = ttk.Button(insumo_frame, text="Buscar Insumo", command=self.buscar_insumo)
+        btn_buscar_insumo.grid(row=0, column=1, padx=5)
+
+        ttk.Label(insumo_frame, text="Cantidad:").grid(row=0, column=2, padx=5)
+        self.entry_cantidad = ttk.Entry(insumo_frame, width=8)
+        self.entry_cantidad.grid(row=0, column=3, padx=5)
+        btn_add_insumo = ttk.Button(insumo_frame, text="Añadir a la Cotización", command=self.anadir_insumo)
+        btn_add_insumo.grid(row=0, column=4, padx=10)
+
+        # --- Treeview para detalles de la cotización ---
+        detalle_frame = ttk.LabelFrame(self, text="Detalle de la Cotización")
+        detalle_frame.grid(row=2, column=0, columnspan=4, sticky="nsew", padx=10, pady=5)
+        self.grid_rowconfigure(2, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        columnas_detalle = ("Cantidad", "Descripción", "Precio Unitario", "Subtotal")
+        self.tree_detalle = ttk.Treeview(detalle_frame, columns=columnas_detalle, show='headings')
+        for col in columnas_detalle:
+            self.tree_detalle.heading(col, text=col)
+        self.tree_detalle.column("Cantidad", width=80, anchor='center')
+        self.tree_detalle.column("Descripción", width=300)
+        self.tree_detalle.column("Precio Unitario", width=120, anchor='e')
+        self.tree_detalle.column("Subtotal", width=120, anchor='e')
+        self.tree_detalle.pack(side="left", fill="both", expand=True)
+
+        # --- Total y Botones de Acción ---
+        total_frame = ttk.Frame(self)
+        total_frame.grid(row=3, column=0, columnspan=4, sticky="ew", padx=10, pady=10)
+        self.lbl_total = ttk.Label(total_frame, text="Total: $0.00", font=("Arial", 14, "bold"))
+        self.lbl_total.pack(side="left")
+
+        btn_guardar = ttk.Button(total_frame, text="Guardar Cotización", command=self.guardar_cotizacion)
+        btn_guardar.pack(side="right", padx=5)
+        btn_limpiar = ttk.Button(total_frame, text="Limpiar", command=self.limpiar_formulario)
+        btn_limpiar.pack(side="right")
+
+    def buscar_cliente(self):
+        ventana_busqueda = VentanaSeleccionarCliente(self.winfo_toplevel(), self.seleccionar_cliente)
+        ventana_busqueda.hacer_modal()
+
+    def seleccionar_cliente(self, datos_cliente):
+        self.cliente_seleccionado = datos_cliente
+        self.lbl_cliente.config(text=f"{datos_cliente[0]} (RUT: {datos_cliente[1]})")
+
+    def buscar_insumo(self):
+        ventana_busqueda = VentanaSeleccionarInsumo(self.winfo_toplevel(), self.seleccionar_insumo)
+        ventana_busqueda.hacer_modal()
+
+    def seleccionar_insumo(self, datos_insumo):
+        self.insumo_seleccionado = datos_insumo
+        self.lbl_insumo.config(text=datos_insumo[0]) # Muestra Descripcion1
+
+    def anadir_insumo(self):
+        if not self.insumo_seleccionado:
+            messagebox.showwarning("Atención", "Debe seleccionar un insumo.")
+            return
+        
+        cantidad_str = self.entry_cantidad.get().strip()
+        if not cantidad_str.isdigit() or int(cantidad_str) <= 0:
+            messagebox.showwarning("Atención", "La cantidad debe ser un número entero positivo.")
+            return
+        
+        cantidad = int(cantidad_str)
+        precio_unitario = float(self.insumo_seleccionado[5]) # Columna Precio
+        subtotal = cantidad * precio_unitario
+
+        # Añadir al Treeview
+        descripcion_completa = self.insumo_seleccionado[0]
+        item_data = (cantidad, descripcion_completa, f"{precio_unitario:.2f}", f"{subtotal:.2f}")
+        item_id = self.tree_detalle.insert("", "end", values=item_data)
+        
+        # Guardar datos completos del insumo en el item del treeview para uso posterior
+        self.tree_detalle.item(item_id, tags=(self.insumo_seleccionado,))
+
+        self.actualizar_total()
+        self.insumo_seleccionado = None
+        self.lbl_insumo.config(text="Ningún insumo seleccionado")
+        self.entry_cantidad.delete(0, "end")
+
+    def actualizar_total(self):
+        self.total_cotizacion = 0.0
+        for item_id in self.tree_detalle.get_children():
+            subtotal_str = self.tree_detalle.item(item_id)['values'][3]
+            self.total_cotizacion += float(subtotal_str)
+        self.lbl_total.config(text=f"Total: ${self.total_cotizacion:.2f}")
+
+    def guardar_cotizacion(self):
+        if not self.cliente_seleccionado:
+            messagebox.showwarning("Atención", "Debe seleccionar un cliente.")
+            return
+        if not self.tree_detalle.get_children():
+            messagebox.showwarning("Atención", "La cotización no tiene productos.")
+            return
+
+        # 1. Obtener el número de la nueva cotización
+        ruta_cotizaciones = os.path.join("data", "data_cotizaciones.csv")
+        nro_cotizacion = 1
+        try:
+            with open(ruta_cotizaciones, 'r', encoding='utf-8') as f:
+                nro_cotizacion = sum(1 for row in f)
+        except FileNotFoundError:
+            pass # El archivo se creará, el nro es 1
+
+        # 2. Guardar en data_cotizaciones.csv
+        datos_cotizacion = [
+            nro_cotizacion,
+            datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "Creada",
+            self.cliente_seleccionado[0], # Nombre del cliente
+            f"{self.total_cotizacion:.2f}"
+        ]
+        with open(ruta_cotizaciones, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(datos_cotizacion)
+
+        # 3. Guardar en data_cotizaciones_detalle.csv
+        ruta_detalle = os.path.join("data", "data_cotizaciones_detalle.csv")
+        with open(ruta_detalle, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            for item_id in self.tree_detalle.get_children():
+                valores_vista = self.tree_detalle.item(item_id)['values']
+                datos_insumo_completos = eval(self.tree_detalle.item(item_id)['tags'][0])
+                
+                detalle_fila = [
+                    nro_cotizacion,
+                    valores_vista[0], # Cantidad
+                    datos_insumo_completos[0], # Desc1
+                    datos_insumo_completos[1], # Desc2
+                    datos_insumo_completos[2], # Desc3
+                    datos_insumo_completos[3], # Unidad
+                    float(valores_vista[2]), # Precio Unitario
+                    float(valores_vista[3])  # Subtotal
+                ]
+                writer.writerow(detalle_fila)
+
+        messagebox.showinfo("Éxito", f"Cotización N° {nro_cotizacion} guardada correctamente.")
+        self.limpiar_formulario()
+
+    def limpiar_formulario(self):
+        self.cliente_seleccionado = None
+        self.lbl_cliente.config(text="Ningún cliente seleccionado")
+        self.tree_detalle.delete(*self.tree_detalle.get_children())
+        self.actualizar_total()
 
 class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
     def __init__(self, parent):
         super().__init__(parent)
-        self.crear_etiqueta(" ", 0, 0)
+        
+        # Frame para la lista de cotizaciones
+        listado_frame = ttk.LabelFrame(self, text="Listado de Cotizaciones")
+        listado_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        columnas_cot = ("Nro", "Fecha", "Estado", "Cliente", "Total")
+        self.tree_cotizaciones = ttk.Treeview(listado_frame, columns=columnas_cot, show='headings')
+        for col in columnas_cot:
+            self.tree_cotizaciones.heading(col, text=col)
+        self.tree_cotizaciones.pack(fill="both", expand=True)
+        self.cargar_cotizaciones()
+        self.tree_cotizaciones.bind("<Double-1>", self.mostrar_detalle)
+
+        # Frame para el detalle de la cotización seleccionada
+        detalle_frame = ttk.LabelFrame(self, text="Detalle")
+        detalle_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        columnas_det = ("Cantidad", "Descripción", "Precio Unit.", "Subtotal")
+        self.tree_detalle_cot = ttk.Treeview(detalle_frame, columns=columnas_det, show='headings')
+        for col in columnas_det:
+            self.tree_detalle_cot.heading(col, text=col)
+        self.tree_detalle_cot.pack(fill="both", expand=True)
+
+    def cargar_cotizaciones(self):
+        ruta_archivo = os.path.join("data", "data_cotizaciones.csv")
+        try:
+            with open(ruta_archivo, 'r', newline='', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                next(reader) # Omitir cabecera
+                for row in reader:
+                    self.tree_cotizaciones.insert("", "end", values=row)
+        except FileNotFoundError:
+            pass # No hay cotizaciones aún
+
+    def mostrar_detalle(self, event):
+        # Limpiar detalle anterior
+        for i in self.tree_detalle_cot.get_children():
+            self.tree_detalle_cot.delete(i)
+
+        item_seleccionado = self.tree_cotizaciones.focus()
+        if not item_seleccionado:
+            return
+        
+        nro_cotizacion_seleccionada = self.tree_cotizaciones.item(item_seleccionado)['values'][0]
+
+        ruta_detalle = os.path.join("data", "data_cotizaciones_detalle.csv")
+        try:
+            with open(ruta_detalle, 'r', newline='', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                next(reader) # Omitir cabecera
+                for row in reader:
+                    if row[0] == str(nro_cotizacion_seleccionada):
+                        # (Cantidad, Descripcion1, PrecioUnitario, Subtotal)
+                        vista_detalle = (row[1], row[2], row[6], row[7])
+                        self.tree_detalle_cot.insert("", "end", values=vista_detalle)
+        except FileNotFoundError:
+            messagebox.showerror("Error", "No se encontró el archivo de detalles de cotización.")
 
 class VentanaInsumos(ttk.Frame, VistaBase):
     def __init__(self, parent):
@@ -347,7 +564,7 @@ class VentanaSeleccionarInsumo(Ventana):
         try:
             with open(ruta_archivo, 'r', newline='', encoding='utf-8') as f:
                 reader = csv.reader(f)
-                next(reader)  # Omitir cabecera
+                next(reader)
                 for row in reader:
                     self.tree.insert("", tk.END, values=row)
         except FileNotFoundError:

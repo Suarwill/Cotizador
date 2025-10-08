@@ -112,16 +112,15 @@ class cimiento:
             if not os.path.exists(cotizaciones_csv_path):
                 with open(cotizaciones_csv_path, "w", newline="", encoding='utf-8') as csv_file:
                     writer = csv.writer(csv_file)
-                    writer.writerow(["Fecha", "Estado", "Cliente", "Precio"])
+                    writer.writerow(["Nro", "Fecha", "Estado", "Cliente", "PrecioTotal"])
                 print("Archivo Cotizaciones creado!")
 
             cotizaciones_detalle_csv_path = os.path.join(data_dir, "data_cotizaciones_detalle.csv")
             if not os.path.exists(cotizaciones_detalle_csv_path):
                 with open(cotizaciones_detalle_csv_path, "w", newline="", encoding='utf-8') as csv_file:
                     writer = csv.writer(csv_file)
-                    writer.writerow(["Fecha", "Estado", "Cliente", "Precio"])
+                    writer.writerow(["Nro_Cotizacion", "Cantidad", "Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "PrecioUnitario", "Subtotal"])
                 print("Archivo Cotizaciones Detalle creado!")
-            
         except Exception as e:
             print(f"Error al crear entorno de datos: {e}")
 
