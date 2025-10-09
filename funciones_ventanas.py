@@ -8,7 +8,7 @@ from dotenv import load_dotenv, set_key
 import tkinter as tk
 import sv_ttk
 from tkinter import Tk, Text
-from tkinter import ttk
+from tkinter import ttk, filedialog, PhotoImage
 from tkinter import messagebox
 
 # Importar desde archivos
@@ -73,6 +73,29 @@ class VentanaPrincipal:
         self.ventana.title("Principal")
         width, height, posicion = 800, 600, 2
         self.ventana.geometry(f"{width}x{height}+{int((self.ventana.winfo_screenwidth() - width) / posicion)}+{int((self.ventana.winfo_screenheight() - height) / posicion)}")
+        
+        # --- Cargar Icono ---
+        ruta_icono = os.getenv("ICONO_APP")
+        if ruta_icono and os.path.exists(ruta_icono):
+            try:
+                if ruta_icono.lower().endswith('.ico'):
+                    self.ventana.iconbitmap(ruta_icono)
+                else:
+                    img_icono = PhotoImage(file=ruta_icono)
+                    self.ventana.iconphoto(True, img_icono)
+            except Exception as e:
+                print(f"Error al cargar el icono: {e}")
+
+        # --- Contenedor Principal para los frames ---
+        self.container = ttk.Frame(self.ventana)
+        self.container.pack(side="top", fill="both", expand=True)
+        self.container.grid_rowconfigure(0, weight=1)
+        self.container.grid_columnconfigure(0, weight=1)
+
+        # --- Cargar Imagen de Fondo ---
+        self.bg_image_label = None
+        self.bg_photo = None # Mantener una referencia
+        self.cargar_imagen_fondo()
 
         # --- Barra de Menú ---
         menubar = tk.Menu(self.ventana)
@@ -99,21 +122,32 @@ class VentanaPrincipal:
         # Menú Clientes
         menubar.add_command(label="Clientes", command=lambda: self._mostrar_frame(VentanaClientes))
 
-        # --- Contenedor Principal para los frames ---
-        self.container = ttk.Frame(self.ventana)
-        self.container.pack(side="top", fill="both", expand=True)
-        self.container.grid_rowconfigure(0, weight=1)
-        self.container.grid_columnconfigure(0, weight=1)
-
-        self._mostrar_frame(VentanaCrearCotizacion) # Iniciar con la ventana de crear cotización
+        self._mostrar_frame(VentanaCrearCotizacion) 
 
     def _mostrar_frame(self, ClaseDelFrame, *args, **kwargs):
         # Limpia el frame anterior
         for widget in self.container.winfo_children():
             widget.destroy()
-        # Crea y muestra el nuevo frame, pasándole el controlador (la instancia de VentanaPrincipal)
         frame = ClaseDelFrame(parent=self.container, controller=self, *args, **kwargs)
         frame.grid(row=0, column=0, sticky="nsew")
+        if self.bg_image_label:
+            self.bg_image_label.lower(frame)
+
+    def cargar_imagen_fondo(self):
+        ruta_imagen = os.getenv("IMAGEN_FONDO")
+        if ruta_imagen and os.path.exists(ruta_imagen):
+            try:
+                self.bg_photo = PhotoImage(file=ruta_imagen)
+                if self.bg_image_label:
+                    self.bg_image_label.config(image=self.bg_photo)
+                else:
+                    self.bg_image_label = ttk.Label(self.container, image=self.bg_photo)
+                    self.bg_image_label.place(x=0, y=0, relwidth=1, relheight=1)
+            except Exception as e:
+                print(f"Error al cargar la imagen de fondo: {e}")
+        elif self.bg_image_label:
+            self.bg_image_label.destroy()
+            self.bg_image_label = None
 
     def abrir_editor_cotizacion(self, nro_cotizacion, **kwargs):
         # Cambia al frame de creación de cotización pasándole el número a editar
@@ -704,6 +738,8 @@ class VentanaConfiguracion(ttk.Frame, VistaBase):
         self.crear_etiqueta(self, "Usuario: ", 0, 1)
         self.crear_etiqueta(self, "Contraseña: ", 1, 1)
         self.crear_etiqueta(self, "Carpeta de descargas: ", 2, 1)
+        self.crear_etiqueta(self, "Imagen de Fondo:", 3, 1)
+        self.crear_etiqueta(self, "Icono Aplicación:", 4, 1)
 
         self.userdata =     self.crear_entrada_texto(self, 30, 1)
         self.userdata.grid(row=0, column=2)
@@ -711,31 +747,57 @@ class VentanaConfiguracion(ttk.Frame, VistaBase):
         self.contradata.grid(row=1, column=2)
         self.carpeta =      self.crear_entrada_texto(self, 30, 1)
         self.carpeta.grid(row=2, column=2)
+        self.imagen_fondo_path = self.crear_entrada_texto(self, 30, 1)
+        self.imagen_fondo_path.grid(row=3, column=2)
+        self.icono_app_path = self.crear_entrada_texto(self, 30, 1)
+        self.icono_app_path.grid(row=4, column=2)
+
+        # Botones para buscar archivos
+        ttk.Button(self, text="...", width=3, command=lambda: self.buscar_archivo(self.imagen_fondo_path, [("Archivos de Imagen", "*.png *.jpg *.jpeg *.gif")])).grid(row=3, column=3, padx=5)
+        ttk.Button(self, text="...", width=3, command=lambda: self.buscar_archivo(self.icono_app_path, [("Archivos de Icono", "*.ico *.png")])).grid(row=4, column=3, padx=5)
 
         user = cimiento.codec(os.getenv("USERNAME"), False)
         self.userdata.insert(tk.END, user)
         pasw = cimiento.codec(os.getenv("PASSWORD"), False)
         self.contradata.insert(tk.END, pasw)
-        carpeta = os.getenv("CARPETA")
-        self.carpeta.insert(tk.END, carpeta)
+        self.carpeta.insert(tk.END, os.getenv("CARPETA", ""))
+        self.imagen_fondo_path.insert(tk.END, os.getenv("IMAGEN_FONDO", ""))
+        self.icono_app_path.insert(tk.END, os.getenv("ICONO_APP", ""))
 
-        self.crear_boton("Guardar", self.guardar, 3, 2)
-        self.crear_boton("Cerrar Vista", self.destroy, 3, 1)
+        self.crear_boton("Guardar", self.guardar, 5, 2)
+        self.crear_boton("Cerrar Vista", self.destroy, 5, 1)
 
         self.crear_etiqueta(self, " ", 0, 3)
         self.expandir_columnas(4)
+
+    def buscar_archivo(self, entry_widget, filetypes):
+        """Abre un diálogo para seleccionar un archivo y lo inserta en el widget de entrada."""
+        filepath = filedialog.askopenfilename(filetypes=filetypes)
+        if filepath:
+            entry_widget.delete("1.0", tk.END)
+            entry_widget.insert("1.0", filepath)
 
     def guardar(self):
         user = self.userdata.get("1.0", tk.END).strip()
         clave = self.contradata.get("1.0", tk.END).strip()
         carpeta = self.carpeta.get("1.0", tk.END).strip()
+        imagen_fondo = self.imagen_fondo_path.get("1.0", tk.END).strip()
+        icono_app = self.icono_app_path.get("1.0", tk.END).strip()
 
         if os.path.exists('.env'):
             set_key(".env", "USERNAME", cimiento.codec(user))
             set_key(".env", "PASSWORD", cimiento.codec(clave))
             set_key(".env", "CARPETA", carpeta)
-            print("Archivos actualizados con éxito.")
+            set_key(".env", "IMAGEN_FONDO", imagen_fondo)
+            set_key(".env", "ICONO_APP", icono_app)
+            
+            messagebox.showinfo("Guardado", "Configuración guardada con éxito. Algunos cambios (como el icono o la imagen de fondo) pueden requerir reiniciar la aplicación.")
+            
+            # Recargar dinámicamente la imagen de fondo en la ventana principal
+            if self.controller:
+                self.controller.cargar_imagen_fondo()
+
             self.destroy()
         else:
-            print("No se encontró el archivo .env")
+            messagebox.showerror("Error", "No se encontró el archivo .env")
         return

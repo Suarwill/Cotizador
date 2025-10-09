@@ -83,6 +83,8 @@ class cimiento:
                 with open(".env", "w") as env_file:
                     chrome = "%APPDATA%/Google/Chrome"
                     env_file.write("USERNAME=\nPASSWORD=\nCARPETA=\n")
+                    env_file.write("IMAGEN_FONDO=/assets/background.jpeg\n")
+                    env_file.write("ICONO_APP=/assets/logo.ico\n")
                     env_file.write(f"PERFIL_CHROME={chrome}")
                 print("Archivo .env creado!")
         except Exception as e:
@@ -90,8 +92,10 @@ class cimiento:
 
         try:
             data_dir = "data"
+            assets_dir = "assets"
             if not os.path.exists(data_dir):
                 os.makedirs(data_dir)
+                os.makedirs(assets_dir)
                 print(f"Directorio '{data_dir}' creado!")
 
             cliente_csv_path = os.path.join(data_dir, "data_clientes.csv")
