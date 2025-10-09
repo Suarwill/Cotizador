@@ -94,7 +94,7 @@ class cimiento:
                 os.makedirs(data_dir)
                 print(f"Directorio '{data_dir}' creado!")
 
-            cliente_csv_path = os.path.join(data_dir, "data_cliente.csv")
+            cliente_csv_path = os.path.join(data_dir, "data_clientes.csv")
             if not os.path.exists(cliente_csv_path):
                 with open(cliente_csv_path, "w", newline="", encoding='utf-8') as csv_file:
                     writer = csv.writer(csv_file)
