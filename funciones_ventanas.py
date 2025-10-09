@@ -24,6 +24,13 @@ class VistaBase:
 
     def crear_entrada_texto(self, parent, width, height, **kwargs):
         text_widget = Text(parent, width=width, height=height, **kwargs)
+
+        def _focus_next_widget(event):
+            """Mueve el foco al siguiente widget y previene el salto de línea."""
+            event.widget.tk_focusNext().focus()
+            return "break"
+
+        text_widget.bind("<Tab>", _focus_next_widget)
         return text_widget
 
     def expandir_columnas(self, num_columnas):
@@ -159,18 +166,49 @@ class VentanaClientes(ttk.Frame, VistaBase):
             messagebox.showwarning("Campos requeridos", "El Nombre y el RUT son obligatorios.")
             return
 
-        datos_cliente = [nombre, rut, direccion, telefono, correo]
+        datos_cliente_nuevo = [nombre, rut, direccion, telefono, correo]
         ruta_archivo = os.path.join("data", "data_clientes.csv")
+        clientes_existentes = []
+        rut_encontrado = False
+        indice_cliente = -1
 
         try:
+            # Leer todos los clientes existentes
+            with open(ruta_archivo, 'r', newline='', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                header = next(reader)
+                clientes_existentes = list(reader)
+
+            # Buscar si el RUT ya existe
+            for i, cliente in enumerate(clientes_existentes):
+                if cliente and cliente[1] == rut:
+                    rut_encontrado = True
+                    indice_cliente = i
+                    break
+        except (FileNotFoundError, StopIteration):
+            # Si el archivo no existe o está vacío, no hay duplicados.
+            pass
+
+        if rut_encontrado:
+            respuesta = messagebox.askyesno("RUT Duplicado", 
+                                            f"El RUT '{rut}' ya existe. ¿Desea reemplazar los datos del cliente existente?")
+            if respuesta: # Si el usuario dice SÍ
+                clientes_existentes[indice_cliente] = datos_cliente_nuevo
+                # Reescribir todo el archivo
+                with open(ruta_archivo, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(header)
+                    writer.writerows(clientes_existentes)
+                messagebox.showinfo("Éxito", "Cliente actualizado correctamente.")
+                self.limpiar_campos()
+            else: # Si el usuario dice NO
+                messagebox.showinfo("Operación cancelada", "Por favor, guarde el cliente con un RUT diferente.")
+        else: # Si el RUT no se encontró, guardar como nuevo
             with open(ruta_archivo, 'a', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
-                writer.writerow(datos_cliente)
-            
+                writer.writerow(datos_cliente_nuevo)
             messagebox.showinfo("Éxito", "Cliente guardado correctamente.")
             self.limpiar_campos()
-        except Exception as e:
-            messagebox.showerror("Error al guardar", f"No se pudo guardar el cliente:\n{e}")
 
     def limpiar_campos(self):
         self.datacliente.delete("1.0", tk.END)
@@ -239,6 +277,8 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
         self.cliente_seleccionado = None
         self.insumo_seleccionado = None
         self.total_cotizacion = 0.0
+        self.nro_cotizacion_editando = None # Para saber si estamos editando
+        self.detalle_data = {} # Diccionario para almacenar datos completos
 
         # --- Sección Cliente ---
         cliente_frame = ttk.LabelFrame(self, text="Cliente")
@@ -278,6 +318,7 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
         self.tree_detalle.column("Precio Unitario", width=120, anchor='e')
         self.tree_detalle.column("Subtotal", width=120, anchor='e')
         self.tree_detalle.pack(side="left", fill="both", expand=True)
+        self.tree_detalle.bind("<Double-1>", self.on_detalle_double_click)
 
         # --- Total y Botones de Acción ---
         total_frame = ttk.Frame(self)
@@ -289,6 +330,57 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
         btn_guardar.pack(side="right", padx=5)
         btn_limpiar = ttk.Button(total_frame, text="Limpiar", command=self.limpiar_formulario)
         btn_limpiar.pack(side="right")
+
+    def on_detalle_double_click(self, event):
+        region = self.tree_detalle.identify("region", event.x, event.y)
+        if region != "cell":
+            return
+
+        column_id = self.tree_detalle.identify_column(event.x)
+        column_index = int(column_id.replace('#', '')) - 1
+        
+        editable_columns = [0, 1, 2] # Indices de Cantidad, Descripción, Precio Unitario
+        if column_index not in editable_columns:
+            return
+
+        item_id = self.tree_detalle.focus()
+        if not item_id:
+            return
+
+        # Obtener la geometría de la celda
+        x, y, width, height = self.tree_detalle.bbox(item_id, column_id)
+
+        # Crear un Entry sobre la celda
+        entry_var = tk.StringVar()
+        entry = ttk.Entry(self.tree_detalle, textvariable=entry_var)
+        entry.place(x=x, y=y, width=width, height=height)
+
+        current_value = self.tree_detalle.item(item_id, "values")[column_index]
+        entry_var.set(current_value)
+        entry.focus_set()
+        entry.selection_range(0, tk.END)
+
+        def on_edit_save(event):
+            new_value = entry_var.get()
+            values = list(self.tree_detalle.item(item_id, "values"))
+            
+            try:
+                if column_index == 0: # Cantidad
+                    values[0] = int(new_value)
+                    values[3] = f"{values[0] * float(values[2]):.2f}"
+                elif column_index == 1: # Descripción
+                    values[1] = new_value
+                elif column_index == 2: # Precio Unitario
+                    values[2] = f"{float(new_value):.2f}"
+                    values[3] = f"{int(values[0]) * float(values[2]):.2f}"
+                self.tree_detalle.item(item_id, values=tuple(values))
+                self.actualizar_total()
+            except ValueError:
+                pass # Ignorar si el valor no es numérico para cantidad/precio
+            entry.destroy()
+
+        entry.bind("<Return>", on_edit_save)
+        entry.bind("<FocusOut>", on_edit_save)
 
     def buscar_cliente(self):
         ventana_busqueda = VentanaSeleccionarCliente(self.winfo_toplevel(), self.seleccionar_cliente)
@@ -323,10 +415,9 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
         # Añadir al Treeview
         descripcion_completa = self.insumo_seleccionado[0]
         item_data = (cantidad, descripcion_completa, f"{precio_unitario:.2f}", f"{subtotal:.2f}")
-        item_id = self.tree_detalle.insert("", "end", values=item_data)
+        item_id = self.tree_detalle.insert("", "end", values=item_data, tags=('item',))
         
-        # Guardar datos completos del insumo en el item del treeview para uso posterior
-        self.tree_detalle.item(item_id, tags=(self.insumo_seleccionado,))
+        self.detalle_data[item_id] = self.insumo_seleccionado
 
         self.actualizar_total()
         self.insumo_seleccionado = None
@@ -361,7 +452,7 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
         datos_cotizacion = [
             nro_cotizacion,
             datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "Creada",
+            "Pendiente",
             self.cliente_seleccionado[0], # Nombre del cliente
             f"{self.total_cotizacion:.2f}"
         ]
@@ -375,7 +466,7 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
             writer = csv.writer(f)
             for item_id in self.tree_detalle.get_children():
                 valores_vista = self.tree_detalle.item(item_id)['values']
-                datos_insumo_completos = eval(self.tree_detalle.item(item_id)['tags'][0])
+                datos_insumo_completos = self.detalle_data[item_id]
                 
                 detalle_fila = [
                     nro_cotizacion,
@@ -396,16 +487,18 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
         self.cliente_seleccionado = None
         self.lbl_cliente.config(text="Ningún cliente seleccionado")
         self.tree_detalle.delete(*self.tree_detalle.get_children())
+        self.nro_cotizacion_editando = None
+        self.detalle_data.clear()
         self.actualizar_total()
 
 class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
     def __init__(self, parent):
         super().__init__(parent)
         
-        # Frame para la lista de cotizaciones
+        # 1. Frame para la lista de cotizaciones (General)
         listado_frame = ttk.LabelFrame(self, text="Listado de Cotizaciones")
         listado_frame.pack(fill="both", expand=True, padx=10, pady=5)
-
+        
         columnas_cot = ("Nro", "Fecha", "Estado", "Cliente", "Total")
         self.tree_cotizaciones = ttk.Treeview(listado_frame, columns=columnas_cot, show='headings')
         for col in columnas_cot:
@@ -414,8 +507,22 @@ class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
         self.cargar_cotizaciones()
         self.tree_cotizaciones.bind("<Double-1>", self.mostrar_detalle)
 
-        # Frame para el detalle de la cotización seleccionada
-        detalle_frame = ttk.LabelFrame(self, text="Detalle")
+        # 2. Frame de Acciones
+        acciones_frame = ttk.LabelFrame(self, text="Acciones")
+        acciones_frame.pack(fill="x", expand=False, padx=10, pady=5)
+        acciones_frame.grid_columnconfigure((0, 1, 2), weight=1)
+        
+        btn_editar_estado = ttk.Button(acciones_frame, text="Editar Estado", command=self.editar_estado_cotizacion)
+        btn_editar_estado.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        
+        btn_editar_contenido = ttk.Button(acciones_frame, text="Editar Contenido", command=self.editar_contenido_cotizacion)
+        btn_editar_contenido.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+
+        btn_borrar = ttk.Button(acciones_frame, text="Borrar Cotización", command=self.borrar_cotizacion)
+        btn_borrar.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
+
+        # 3. Frame para el detalle de la cotización seleccionada
+        detalle_frame = ttk.LabelFrame(self, text="Detalle de la Cotización Seleccionada")
         detalle_frame.pack(fill="both", expand=True, padx=10, pady=5)
 
         columnas_det = ("Cantidad", "Descripción", "Precio Unit.", "Subtotal")
@@ -458,6 +565,109 @@ class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
                         self.tree_detalle_cot.insert("", "end", values=vista_detalle)
         except FileNotFoundError:
             messagebox.showerror("Error", "No se encontró el archivo de detalles de cotización.")
+
+    def editar_estado_cotizacion(self):
+        from tkinter import simpledialog
+        item_seleccionado = self.tree_cotizaciones.focus()
+        if not item_seleccionado:
+            messagebox.showwarning("Selección requerida", "Por favor, seleccione una cotización para editar su estado.")
+            return
+
+        valores_actuales = self.tree_cotizaciones.item(item_seleccionado)['values']
+        nro_cotizacion = valores_actuales[0]
+        estado_actual = valores_actuales[2]
+
+        nuevo_estado = simpledialog.askstring("Editar Estado", "Ingrese el nuevo estado:", initialvalue=estado_actual)
+
+        if nuevo_estado:
+            self._actualizar_archivo_csv("data/data_cotizaciones.csv", 0, nro_cotizacion, 2, nuevo_estado)
+            self.recargar_cotizaciones()
+
+    def editar_contenido_cotizacion(self):
+        messagebox.showinfo("Próximamente", "Esta función aún no está implementada.")
+        # Lógica futura para cargar la cotización en la ventana de creación
+
+    def borrar_cotizacion(self):
+        item_seleccionado = self.tree_cotizaciones.focus()
+        if not item_seleccionado:
+            messagebox.showwarning("Selección requerida", "Por favor, seleccione una cotización para borrar.")
+            return
+
+        valores = self.tree_cotizaciones.item(item_seleccionado)['values']
+        nro_cotizacion = valores[0]
+
+        confirmar = messagebox.askyesno("Confirmar Borrado", f"¿Está seguro de que desea eliminar la cotización N° {nro_cotizacion} y todos sus detalles? Esta acción no se puede deshacer.")
+
+        if confirmar:
+            # Borrar de data_cotizaciones.csv
+            self._borrar_fila_csv("data/data_cotizaciones.csv", 0, nro_cotizacion)
+            # Borrar de data_cotizaciones_detalle.csv
+            self._borrar_fila_csv("data/data_cotizaciones_detalle.csv", 0, nro_cotizacion)
+            
+            messagebox.showinfo("Éxito", f"Cotización N° {nro_cotizacion} eliminada correctamente.")
+            self.recargar_cotizaciones()
+            # Limpiar vista de detalle
+            for i in self.tree_detalle_cot.get_children():
+                self.tree_detalle_cot.delete(i)
+
+    def recargar_cotizaciones(self):
+        """Limpia y vuelve a cargar el treeview de cotizaciones."""
+        for i in self.tree_cotizaciones.get_children():
+            self.tree_cotizaciones.delete(i)
+        self.cargar_cotizaciones()
+
+    def _actualizar_archivo_csv(self, ruta_archivo, col_busqueda, valor_busqueda, col_actualizar, nuevo_valor):
+        """Actualiza un valor específico en una fila de un archivo CSV."""
+        try:
+            with open(ruta_archivo, 'r', newline='', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                lineas = list(reader)
+
+            fila_encontrada = False
+            for i, linea in enumerate(lineas):
+                if linea and linea[col_busqueda] == str(valor_busqueda):
+                    lineas[i][col_actualizar] = nuevo_valor
+                    fila_encontrada = True
+                    break
+            
+            if fila_encontrada:
+                with open(ruta_archivo, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerows(lineas)
+            else:
+                messagebox.showerror("Error", f"No se encontró la fila con valor '{valor_busqueda}' en la columna {col_busqueda}.")
+
+        except FileNotFoundError:
+            messagebox.showerror("Error de archivo", f"No se encontró el archivo: {ruta_archivo}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Ocurrió un error al actualizar el archivo:\n{e}")
+
+    def _borrar_fila_csv(self, ruta_archivo, col_busqueda, valor_busqueda):
+        """Borra todas las filas que coincidan con un valor en una columna específica."""
+        try:
+            with open(ruta_archivo, 'r', newline='', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                lineas = list(reader)
+
+            # Conservar solo las líneas que NO coinciden
+            lineas_a_mantener = [lineas[0]] # Mantener la cabecera
+            for linea in lineas[1:]:
+                if not (linea and linea[col_busqueda] == str(valor_busqueda)):
+                    lineas_a_mantener.append(linea)
+
+            if len(lineas_a_mantener) < len(lineas):
+                with open(ruta_archivo, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerows(lineas_a_mantener)
+            else:
+                # Esto podría pasar si se intenta borrar algo que no existe, no es un error crítico.
+                print(f"No se encontraron filas para borrar en {ruta_archivo} con el valor {valor_busqueda}")
+
+        except FileNotFoundError:
+            messagebox.showerror("Error de archivo", f"No se encontró el archivo: {ruta_archivo}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Ocurrió un error al borrar del archivo:\n{e}")
+
 
 class VentanaInsumos(ttk.Frame, VistaBase):
     def __init__(self, parent):
