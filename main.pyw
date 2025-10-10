@@ -28,7 +28,7 @@ def libSetup(*libs):
 
 # Lista a instalar ()
 # ---> Sublista (opcion 1, opcion 2)
-libSetup('tkinter','warnings','pandas','dotenv','requests',('bs4', 'python3-bs4'), 'sv_ttk')
+libSetup('tkinter','warnings','pandas','dotenv','requests',('bs4', 'python3-bs4'), 'sv_ttk', 'reportlab')
 
 # Importar desde archivos
 from funciones_base import cimiento

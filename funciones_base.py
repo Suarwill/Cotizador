@@ -93,9 +93,13 @@ class cimiento:
         try:
             data_dir = "data"
             assets_dir = "assets"
+            pdfs_dir = "pdfs"
             if not os.path.exists(data_dir):
                 os.makedirs(data_dir)
+            if not os.path.exists(assets_dir):
                 os.makedirs(assets_dir)
+            if not os.path.exists(pdfs_dir):
+                os.makedirs(pdfs_dir)
                 print(f"Directorio '{data_dir}' creado!")
 
             cliente_csv_path = os.path.join(data_dir, "data_clientes.csv")

@@ -14,6 +14,7 @@ from tkinter import messagebox
 # Importar desde archivos
 from funciones_base import cimiento
 import funciones_datos as datos
+import funciones_pdf as pdf
 
 # ---------- "Componentes Base de la UI" ----------
 class VistaBase:
@@ -527,7 +528,7 @@ class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
         # 2. Frame de Acciones
         acciones_frame = ttk.LabelFrame(self, text="Acciones")
         acciones_frame.pack(fill="x", expand=False, padx=10, pady=5)
-        acciones_frame.grid_columnconfigure((0, 1, 2), weight=1)
+        acciones_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
         
         btn_editar_estado = ttk.Button(acciones_frame, text="Editar Estado", command=self.editar_estado_cotizacion)
         btn_editar_estado.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
@@ -537,6 +538,9 @@ class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
 
         btn_borrar = ttk.Button(acciones_frame, text="Borrar Cotización", command=self.borrar_cotizacion)
         btn_borrar.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
+
+        btn_crear_pdf = ttk.Button(acciones_frame, text="Crear PDF", command=self.crear_pdf_cotizacion)
+        btn_crear_pdf.grid(row=0, column=3, padx=5, pady=5, sticky="ew")
 
         # 3. Frame para el detalle de la cotización seleccionada
         detalle_frame = ttk.LabelFrame(self, text="Detalle de la Cotización Seleccionada")
@@ -595,6 +599,16 @@ class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
         
         # Llama a un método en la ventana principal para cambiar de frame
         self.controller.abrir_editor_cotizacion(nro_cotizacion)
+
+    def crear_pdf_cotizacion(self):
+        item_seleccionado = self.tree_cotizaciones.focus()
+        if not item_seleccionado:
+            messagebox.showwarning("Selección requerida", "Por favor, seleccione una cotización para crear su PDF.")
+            return
+
+        nro_cotizacion = self.tree_cotizaciones.item(item_seleccionado)['values'][0]
+        
+        pdf.generar_pdf(nro_cotizacion)
 
     def borrar_cotizacion(self):
         item_seleccionado = self.tree_cotizaciones.focus()
