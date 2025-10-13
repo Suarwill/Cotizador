@@ -91,9 +91,9 @@ class cimiento:
             if not env_path.exists():
                 with open(env_path, "w") as env_file:
                     chrome = "%APPDATA%/Google/Chrome"
-                    env_file.write("USERNAME=\nPASSWORD=\nCARPETA=\n")
-                    env_file.write("IMAGEN_FONDO=/assets/background.jpg\n")
-                    env_file.write("ICONO_APP=/assets/logo.ico\n")
+                    env_file.write("USERNAME=''\nPASSWORD=''\nCARPETA=''\n")
+                    env_file.write("IMAGEN_FONDO='/assets/background.jpg'\n")
+                    env_file.write("ICONO_APP='/assets/logo.ico'\n")
                     env_file.write(f"PERFIL_CHROME={chrome}")
                 print("Archivo .env creado!")
 
