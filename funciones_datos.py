@@ -1,5 +1,4 @@
-import os
-import csv
+import os, csv
 from tkinter import messagebox
 from datetime import datetime
 
