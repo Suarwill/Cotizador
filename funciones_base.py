@@ -71,36 +71,45 @@ class cimiento:
         time.sleep(valor_time)
 
     @staticmethod
-    def _crear_directorio_si_no_existe(ruta_dir: Path):
+    def _crear_directorio_si_no_existe(ruta_dir: Path, update_status=None):
         if not ruta_dir.exists():
             ruta_dir.mkdir(parents=True)
-            print(f"Directorio '{ruta_dir}' creado!")
+            if update_status:
+                update_status(f"Directorio '{ruta_dir}' creado.", 100)
 
     @staticmethod
-    def _crear_csv_si_no_existe(ruta_archivo: Path, encabezados: list[str]):
+    def _crear_csv_si_no_existe(ruta_archivo: Path, encabezados: list[str], update_status=None):
         if not ruta_archivo.exists():
             with open(ruta_archivo, "w", newline="", encoding='utf-8') as csv_file:
                 writer = csv.writer(csv_file)
                 writer.writerow(encabezados)
-            print(f"Archivo {ruta_archivo.name} creado!")
+            if update_status:
+                update_status(f"Archivo {ruta_archivo.name} creado.", 100)
 
     @staticmethod
-    def creacion_entorno():
+    def creacion_entorno(update_status=None):
+        def _update(message, progress):
+            if update_status:
+                update_status(message, progress)
+
         try:
+            _update("Verificando archivo .env...", 0)
             env_path = Path(".env")
             if not env_path.exists():
                 with open(env_path, "w") as env_file:
                     chrome = "%APPDATA%/Google/Chrome"
-                    env_file.write("USERNAME=''\nPASSWORD=''\nCARPETA=''\n")
-                    env_file.write("IMAGEN_FONDO='/assets/background.jpg'\n")
-                    env_file.write("ICONO_APP='/assets/logo.ico'\n")
+                    env_file.write("USERNAME=\nPASSWORD=\nCARPETA=\n")
+                    env_file.write("IMAGEN_FONDO=/assets/background.jpeg\n")
+                    env_file.write("ICONO_APP=/assets/logo.ico\n")
                     env_file.write(f"PERFIL_CHROME={chrome}")
-                print("Archivo .env creado!")
+                _update("Archivo .env creado!", 100)
 
             # Creacion de Carpetas Básicas
+            _update("Verificando directorios...", 0)
             directorios = ["data", "assets", "pdfs"]
             for dir_nombre in directorios:
-                cimiento._crear_directorio_si_no_existe(Path(dir_nombre))
+                _update(f"Verificando directorio '{dir_nombre}'...", 50)
+                cimiento._crear_directorio_si_no_existe(Path(dir_nombre), update_status)
 
             data_dir = Path("data")
 
@@ -113,10 +122,12 @@ class cimiento:
             }
 
             for nombre_archivo, headers in archivos_csv.items():
-                cimiento._crear_csv_si_no_existe(data_dir / nombre_archivo, headers)
+                _update(f"Verificando archivo {nombre_archivo}...", 50)
+                cimiento._crear_csv_si_no_existe(data_dir / nombre_archivo, headers, update_status)
 
         except Exception as e:
-            print(f"Error al crear el entorno: {e}")
+            if update_status:
+                update_status(f"Error al crear entorno: {e}", 100)
 
         return "Continuando..."
 
