@@ -66,7 +66,7 @@ class cimiento:
     
     @staticmethod
     def log_error(error_message: str):
-        log_file = Path("error-log.txt")
+        log_file = Path("data/error-log.txt")
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         import traceback
         exc_info = sys.exc_info()
