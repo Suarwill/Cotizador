@@ -7,7 +7,6 @@ def virtualizado():
     return sys.prefix != sys.base_prefix
 
 def libSetup(*libs, update_status=None):
-    """Instala librerías si no están presentes, con soporte para nombres de paquete específicos de pip y apt."""
     for entry in libs:
         if isinstance(entry, tuple) and len(entry) == 3:
             lib, pip_pkg, apt_pkg = entry
@@ -95,7 +94,6 @@ class cimiento:
 
     @staticmethod
     def _get_encryption_key() -> bytes:
-        """Deriva una clave de encriptación desde la MASTER_KEY y el SALT en .env."""
         load_dotenv(override=True)
         master_key_b64 = os.getenv("MASTER_KEY")
         if master_key_b64:
@@ -121,7 +119,6 @@ class cimiento:
 
     @staticmethod
     def encrypt(data: str) -> str:
-        """Encripta datos usando AES-GCM y devuelve una cadena base64."""
         key = cimiento._get_encryption_key()
         aesgcm = AESGCM(key)
         nonce = os.urandom(12) # Nonce de 12 bytes para GCM
@@ -131,7 +128,6 @@ class cimiento:
 
     @staticmethod
     def decrypt(encrypted_b64: str) -> str:
-        """Desencripta datos en base64 usando AES-GCM."""
         key = cimiento._get_encryption_key()
         encrypted_data_with_nonce = b64.b64decode(encrypted_b64)
         nonce, ciphertext = encrypted_data_with_nonce[:12], encrypted_data_with_nonce[12:]
@@ -447,7 +443,6 @@ def guardar_cotizacion_completa(cliente, total, detalles):
     return nro_cotizacion
 
 def actualizar_cotizacion_completa(nro_cotizacion, cliente, total, detalles):
-    """Actualiza una cotización existente, incluyendo su cabecera y detalles."""
     # 1. Actualizar cabecera
     cotizaciones = cotizaciones_repo.read_all(skip_header=False)[1:] # Datos sin cabecera
     
