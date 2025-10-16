@@ -26,7 +26,7 @@ def encontrar_icono(assets_dir: Path) -> str | None:
 
 def crear_exe():
     """Crea el ejecutable usando PyInstaller con las opciones adecuadas."""
-    archivo_script = "main.pyw"
+    archivo_script = "main.py"
     print("\n--- Iniciando la creación del ejecutable ---")
     
     # Opciones base de PyInstaller
