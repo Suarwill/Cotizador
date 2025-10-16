@@ -97,7 +97,13 @@ class cimiento:
     def _get_encryption_key() -> bytes:
         """Deriva una clave de encriptación desde la MASTER_KEY y el SALT en .env."""
         load_dotenv(override=True)
-        master_key = os.getenv("MASTER_KEY", "admin").encode('utf-8')
+        master_key_b64 = os.getenv("MASTER_KEY")
+        if master_key_b64:
+            master_key = b64.b64decode(master_key_b64).decode('utf-8').encode('utf-8')
+        else:
+            # Valor por defecto si no existe en .env
+            master_key = "admin".encode('utf-8')
+
         salt_b64 = os.getenv("SALT")
         if not salt_b64:
             raise ValueError("SALT no encontrado en el archivo .env. Los datos no se pueden descifrar.")
@@ -229,7 +235,7 @@ class cimiento:
                     # Generar y guardar un salt y la clave maestra por defecto
                     salt = os.urandom(SALT_SIZE)
                     env_file.write(f"SALT={b64.b64encode(salt).decode('utf-8')}\n")
-                    env_file.write("MASTER_KEY=admin\n")
+                    env_file.write(f"MASTER_KEY={b64.b64encode('admin'.encode('utf-8')).decode('utf-8')}\n")
                     env_file.write("ICONO_APP=/assets/logo.ico\n")
                     env_file.write(f"PERFIL_CHROME={chrome}")
                 _update("Archivo .env creado!", 100)
@@ -289,9 +295,10 @@ class cimiento:
 
 class CSVRepository:
     """Clase genérica para manejar operaciones CRUD en un archivo CSV."""
-    def __init__(self, filename: str, headers: list[str]):
+    def __init__(self, filename: str, headers: list[str], encrypted: bool = False):
         self.filepath = Path("data") / filename
         self.headers = headers
+        self.encrypted = encrypted
 
     def read_all(self, skip_header=True) -> list[list[str]]:
         if not self.filepath.exists():
@@ -330,10 +337,12 @@ class CSVRepository:
             return False
 
     def append_row(self, row: list):
-        encrypted_row = [cimiento.encrypt(str(cell)) if cell is not None else "" for cell in row]
+        row_to_append = row
+        if self.encrypted:
+            row_to_append = [cimiento.encrypt(str(cell)) if cell is not None else "" for cell in row]
         try:
             with open(self.filepath, 'a', newline='', encoding='utf-8') as f:
-                csv.writer(f).writerow(encrypted_row)
+                csv.writer(f).writerow(row_to_append)
             return True
         except Exception as e:
             error_msg = f"No se pudo añadir la fila al archivo {self.filepath.name}:\n{e}"
@@ -345,7 +354,7 @@ class CSVRepository:
         return len(self.read_all()) + 1
 
 # --- Repositorios de Datos ---
-clientes_repo = CSVRepository("data_clientes.csv", ["Nombre", "RUT", "Direccion", "Telefono", "Correo"])
+clientes_repo = CSVRepository("data_clientes.csv", ["Nombre", "RUT", "Direccion", "Telefono", "Correo"], encrypted=True)
 insumos_repo = CSVRepository("data_productos.csv", ["Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "Costo", "Precio"])
 cotizaciones_repo = CSVRepository("data_cotizaciones.csv", ["Nro", "Fecha", "Estado", "Cliente", "PrecioTotal"])
 detalles_repo = CSVRepository("data_cotizaciones_detalle.csv", ["Nro_Cotizacion", "Cantidad", "Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "PrecioUnitario", "Subtotal"])
@@ -1356,6 +1365,10 @@ class VentanaConfiguracion(ttk.Frame, VistaBase):
         self.imagen_fondo_path.insert(tk.END, os.getenv("IMAGEN_FONDO", ""))
         self.icono_app_path.insert(tk.END, os.getenv("ICONO_APP", ""))
         self.master_key_path.insert(tk.END, os.getenv("MASTER_KEY", "admin"))
+        
+        master_key_b64 = os.getenv("MASTER_KEY")
+        master_key_plain = b64.b64decode(master_key_b64).decode('utf-8') if master_key_b64 else "admin"
+        self.master_key_path.insert(tk.END, master_key_plain)
 
         self.crear_boton("Guardar", self.guardar, 6, 2)
         self.crear_boton("Cerrar Vista", self.destroy, 6, 1)
@@ -1377,7 +1390,9 @@ class VentanaConfiguracion(ttk.Frame, VistaBase):
         imagen_fondo = self.imagen_fondo_path.get("1.0", tk.END).strip()
         icono_app = self.icono_app_path.get("1.0", tk.END).strip()
         new_master_key = self.master_key_path.get("1.0", tk.END).strip()
-        old_master_key = os.getenv("MASTER_KEY", "admin")
+
+        old_master_key_b64 = os.getenv("MASTER_KEY")
+        old_master_key = b64.b64decode(old_master_key_b64).decode('utf-8') if old_master_key_b64 else "admin"
 
         # --- Lógica de Re-encriptación si la clave maestra cambia ---
         if new_master_key != old_master_key:
@@ -1390,27 +1405,30 @@ class VentanaConfiguracion(ttk.Frame, VistaBase):
                 messagebox.showinfo("Cancelado", "La configuración no ha sido guardada.")
                 return
 
+            new_master_key_b64 = b64.b64encode(new_master_key.encode('utf-8')).decode('utf-8')
+
             # Actualizar la clave en .env ANTES de re-encriptar
-            set_key(".env", "MASTER_KEY", new_master_key)
+            set_key(".env", "MASTER_KEY", new_master_key_b64)
             load_dotenv(override=True) # Recargar para que las funciones usen la nueva clave
 
-            # Re-encriptar todos los repositorios
-            repos_a_reencriptar = [clientes_repo, insumos_repo, cotizaciones_repo, detalles_repo]
-            for repo in repos_a_reencriptar:
-                try:
-                    # 1. Leer con la clave antigua (que está en memoria)
-                    os.environ["MASTER_KEY"] = old_master_key
-                    datos = repo.read_all()
-                    # 2. Escribir con la nueva clave (que está en el .env recargado)
-                    os.environ["MASTER_KEY"] = new_master_key
-                    repo.write_all(datos)
-                except Exception as e:
-                    messagebox.showerror("Error de Re-encriptación", f"Falló la re-encriptación de {repo.filepath.name}.\nError: {e}")
-                    set_key(".env", "MASTER_KEY", old_master_key) # Revertir clave si falla
-                    return
+            # Re-encriptar solo el repositorio de clientes
+            try:
+                # 1. Leer con la clave antigua (que está en memoria)
+                os.environ["MASTER_KEY"] = b64.b64encode(old_master_key.encode('utf-8')).decode('utf-8')
+                datos = clientes_repo.read_all()
+                # 2. Escribir con la nueva clave (que está en el .env recargado)
+                os.environ["MASTER_KEY"] = new_master_key_b64
+                clientes_repo.write_all(datos)
+            except Exception as e:
+                error_msg = f"Falló la re-encriptación de {clientes_repo.filepath.name}.\nError: {e}"
+                messagebox.showerror("Error de Re-encriptación", error_msg)
+                cimiento.log_error(error_msg)
+                set_key(".env", "MASTER_KEY", old_master_key_b64) # Revertir clave si falla
+                return
 
         if os.path.exists('.env'):
-            for key_env, value in [("USERNAME", cimiento.codec(user)), ("PASSWORD", cimiento.codec(clave)), ("CARPETA", carpeta), ("IMAGEN_FONDO", imagen_fondo), ("ICONO_APP", icono_app), ("MASTER_KEY", new_master_key)]:
+            new_master_key_b64 = b64.b64encode(new_master_key.encode('utf-8')).decode('utf-8')
+            for key_env, value in [("USERNAME", cimiento.codec(user)), ("PASSWORD", cimiento.codec(clave)), ("CARPETA", carpeta), ("IMAGEN_FONDO", imagen_fondo), ("ICONO_APP", icono_app), ("MASTER_KEY", new_master_key_b64)]:
                 set_key(".env", key_env, value)
             
             messagebox.showinfo("Guardado", "Configuración guardada con éxito. Algunos cambios (como el icono o la imagen de fondo) pueden requerir reiniciar la aplicación.")
