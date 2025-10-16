@@ -392,6 +392,14 @@ class ClienteService:
                 return cliente
         return None
 
+    @staticmethod
+    def borrar(rut_cliente):
+        if not rut_cliente:
+            return False
+        clientes_actuales = [c for c in ClienteService.cargar_todos() if c and c[1] != rut_cliente]
+        return clientes_repo.write_all(clientes_actuales)
+
+
 class InsumoService:
     @staticmethod
     def cargar_todos():
@@ -399,7 +407,28 @@ class InsumoService:
 
     @staticmethod
     def guardar(datos_insumo):
+        desc1_nuevo = datos_insumo[0]
+        insumos_existentes = insumos_repo.read_all(skip_header=False)
+
+        if not insumos_existentes:
+            return insumos_repo.write_all([datos_insumo])
+
+        insumos_existentes.pop(0) # Quitar cabecera
+
+        for i, insumo in enumerate(insumos_existentes):
+            if insumo and insumo[0] == desc1_nuevo:
+                respuesta = messagebox.askyesno("Insumo Duplicado", f"El insumo '{desc1_nuevo}' ya existe. ¿Desea reemplazar los datos?")
+                if respuesta:
+                    insumos_existentes[i] = datos_insumo
+                    return insumos_repo.write_all(insumos_existentes)
+                else:
+                    return False
         return insumos_repo.append_row(datos_insumo)
+
+    @staticmethod
+    def borrar(desc1_insumo):
+        insumos_actuales = [i for i in InsumoService.cargar_todos() if i and i[0] != desc1_insumo]
+        return insumos_repo.write_all(insumos_actuales)
 
 class CotizacionService:
     @staticmethod
@@ -783,12 +812,13 @@ class VentanaClientes(ttk.Frame, VistaBase):
 
         # --- Frame de Acciones ---
         acciones_frame = ttk.LabelFrame(self, text="Acciones")
-        acciones_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
-        acciones_frame.grid_columnconfigure((0, 1, 2), weight=1)
+        acciones_frame.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
+        acciones_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         ttk.Button(acciones_frame, text="Guardar", command=self.guardar).grid(row=0, column=0, padx=10, pady=10, sticky="ew")
         ttk.Button(acciones_frame, text="Buscar", command=self.abrir_ventana_busqueda).grid(row=0, column=1, padx=10, pady=10, sticky="ew")
-        ttk.Button(acciones_frame, text="Limpiar", command=self.limpiar_campos).grid(row=0, column=2, padx=10, pady=10, sticky="ew")
+        ttk.Button(acciones_frame, text="Borrar", command=self.borrar_cliente).grid(row=0, column=2, padx=10, pady=10, sticky="ew")
+        ttk.Button(acciones_frame, text="Limpiar", command=self.limpiar_campos).grid(row=0, column=3, padx=10, pady=10, sticky="ew")
 
     def guardar(self):
         nombre = self.datacliente.get("1.0", tk.END).strip()
@@ -808,6 +838,21 @@ class VentanaClientes(ttk.Frame, VistaBase):
         if guardado_exitoso:
             messagebox.showinfo("Éxito", "Cliente guardado correctamente.")
             self.limpiar_campos()
+
+    def borrar_cliente(self):
+        rut_a_borrar = self.datarut.get("1.0", tk.END).strip()
+        if not rut_a_borrar:
+            messagebox.showwarning("Atención", "No hay ningún cliente cargado para borrar (el campo RUT está vacío).")
+            return
+
+        confirmar = messagebox.askyesno("Confirmar Borrado", f"¿Está seguro de que desea eliminar al cliente con RUT {rut_a_borrar}? Esta acción no se puede deshacer.")
+
+        if confirmar:
+            if ClienteService.borrar(rut_a_borrar):
+                messagebox.showinfo("Éxito", "Cliente eliminado correctamente.")
+                self.limpiar_campos()
+            else:
+                messagebox.showerror("Error", "No se pudo eliminar el cliente.")
 
     def limpiar_campos(self):
         self.datacliente.delete("1.0", tk.END)
@@ -1264,12 +1309,13 @@ class VentanaInsumos(ttk.Frame, VistaBase):
 
         # --- Frame de Acciones ---
         acciones_frame = ttk.LabelFrame(self, text="Acciones")
-        acciones_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
-        acciones_frame.grid_columnconfigure((0, 1, 2), weight=1)
+        acciones_frame.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
+        acciones_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         ttk.Button(acciones_frame, text="Guardar", command=self.guardar).grid(row=0, column=0, padx=10, pady=10, sticky="ew")
         ttk.Button(acciones_frame, text="Buscar", command=self.abrir_ventana_busqueda).grid(row=0, column=1, padx=10, pady=10, sticky="ew")
-        ttk.Button(acciones_frame, text="Limpiar", command=self.limpiar_campos).grid(row=0, column=2, padx=10, pady=10, sticky="ew")
+        ttk.Button(acciones_frame, text="Borrar", command=self.borrar_insumo).grid(row=0, column=2, padx=10, pady=10, sticky="ew")
+        ttk.Button(acciones_frame, text="Limpiar", command=self.limpiar_campos).grid(row=0, column=3, padx=10, pady=10, sticky="ew")
 
     def guardar(self):
         desc1 = self.datadesc1.get("1.0", tk.END).strip()
@@ -1289,6 +1335,22 @@ class VentanaInsumos(ttk.Frame, VistaBase):
         if InsumoService.guardar(datos_insumo):
             messagebox.showinfo("Éxito", "Insumo guardado correctamente.")
             self.limpiar_campos()
+        else:
+            # Si guardar devuelve False, es porque el usuario canceló la sobreescritura
+            pass
+
+    def borrar_insumo(self):
+        desc1_a_borrar = self.datadesc1.get("1.0", tk.END).strip()
+        if not desc1_a_borrar:
+            messagebox.showwarning("Atención", "No hay ningún insumo cargado para borrar (el campo 'Descripción 1' está vacío).")
+            return
+
+        confirmar = messagebox.askyesno("Confirmar Borrado", f"¿Está seguro de que desea eliminar el insumo '{desc1_a_borrar}'? Esta acción no se puede deshacer.")
+
+        if confirmar:
+            if InsumoService.borrar(desc1_a_borrar):
+                messagebox.showinfo("Éxito", "Insumo eliminado correctamente.")
+                self.limpiar_campos()
 
     def limpiar_campos(self):
         for widget in [self.datadesc1, self.datadesc2, self.datadesc3, self.dataunidad, self.datacosto, self.dataprecio]:
