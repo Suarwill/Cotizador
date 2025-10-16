@@ -292,7 +292,6 @@ class cimiento:
             cimiento.log_error(f"{error_msg}: {e}", exc_info=True)
             return False
 
-
 class CSVRepository:
     """Clase genérica para manejar operaciones CRUD en un archivo CSV."""
     def __init__(self, filename: str, headers: list[str], encrypted: bool = False):
@@ -358,6 +357,7 @@ clientes_repo = CSVRepository("data_clientes.csv", ["Nombre", "RUT", "Direccion"
 insumos_repo = CSVRepository("data_productos.csv", ["Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "Costo", "Precio"])
 cotizaciones_repo = CSVRepository("data_cotizaciones.csv", ["Nro", "Fecha", "Estado", "Cliente", "PrecioTotal"])
 detalles_repo = CSVRepository("data_cotizaciones_detalle.csv", ["Nro_Cotizacion", "Cantidad", "Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "PrecioUnitario", "Subtotal"])
+
 class ClienteService:
     @staticmethod
     def cargar_todos():
@@ -1225,7 +1225,6 @@ class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
         for i in self.tree_cotizaciones.get_children():
             self.tree_cotizaciones.delete(i)
         self.cargar_todas_cotizaciones()
-
 
 class VentanaInsumos(ttk.Frame, VistaBase):
     def __init__(self, parent, controller):
