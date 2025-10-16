@@ -39,27 +39,28 @@ def libSetup(*libs, update_status=None):
 
 # Lista a instalar (incluyendo 'tkinter' para asegurar su disponibilidad)
 # ---> Sublista (opcion 1, opcion 2)
-LIBS_A_INSTALAR = ['tkinter', 'warnings','pandas','dotenv','requests',('bs4', 'beautifulsoup4', 'python3-bs4'), 'sv_ttk', 'reportlab']
+LIBS_A_INSTALAR = ['tkinter', 'sv_ttk', 'warnings','dotenv','requests',('bs4', 'beautifulsoup4', 'python3-bs4'), 'reportlab']
 
 # Ejecutar libSetup para todas las librerías antes de cualquier importación de UI
 libSetup(*LIBS_A_INSTALAR)
 
 # --- Importaciones de UI (después de la instalación) ---
+from datetime import datetime
+
 import tkinter as tk
 from tkinter import (Tk, Text, filedialog, messagebox, simpledialog, PhotoImage, ttk)
 import sv_ttk
-import base64 as b64
-import csv
 import warnings
-from datetime import datetime
-
 import requests as rq
-from bs4 import BeautifulSoup as bs
 from dotenv import load_dotenv, set_key
+from bs4 import BeautifulSoup as bs
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
+
+import base64 as b64
+import csv
 
 class cimiento:
     
