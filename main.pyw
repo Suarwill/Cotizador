@@ -1,6 +1,5 @@
 # ---------- "Autoinstalador de librerias" ----------
-import importlib, subprocess, sys, platform, tkinter as tk
-from tkinter import ttk
+import importlib, subprocess, sys, platform
 
 def virtualizado():
     return sys.prefix != sys.base_prefix
@@ -34,14 +33,20 @@ def libSetup(*libs, update_status=None):
 
 # Lista a instalar ()
 # ---> Sublista (opcion 1, opcion 2)
-LIBS_A_INSTALAR = ['tkinter','warnings','pandas','dotenv','requests',('bs4', 'python3-bs4'), 'sv_ttk', 'reportlab']
+LIBS_A_INSTALAR = ['warnings','pandas','dotenv','requests',('bs4', 'python3-bs4'), 'sv_ttk', 'reportlab']
 
 # Importar desde archivos
 from funciones_base import cimiento
 from funciones_ventanas import VentanaPrincipal
 
+# Importacion inicial
+libSetup('tkinter')
+import tkinter as tk
+from tkinter import ttk
+
 # ---------- "Inicio" ----------
 if __name__ == "__main__":
+    
     # --- Ventana de Carga (Splash Screen) ---
     splash_root = tk.Tk()
     splash_root.title("Cargando...")
