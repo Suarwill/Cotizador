@@ -1,5 +1,5 @@
 # ---------- "Autoinstalador de librerias" ----------
-import sys, time, importlib, os, platform, subprocess
+import sys, time, importlib, os, platform, subprocess, logging
 from multiprocessing import Pool
 from pathlib import Path
 
@@ -76,21 +76,25 @@ from cryptography.hazmat.backends import default_backend
 
 SALT_SIZE = 16
 
-class cimiento:
+def setup_logging():
+    log_dir = Path("data")
+    log_dir.mkdir(exist_ok=True)
+    log_file = log_dir / "logs.txt"
     
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file, encoding='utf-8'),
+            # Opcional: Descomentar para ver logs también en la consola
+            # logging.StreamHandler() 
+        ]
+    )
+
+class cimiento:
     @staticmethod
-    def log_error(error_message: str):
-        log_file = Path("data/error-log.txt")
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        import traceback
-        exc_info = sys.exc_info()
-        tb = "".join(traceback.format_exception(*exc_info)) if exc_info[0] else "No exception info."
-        full_message = f"[{timestamp}] {error_message}\n{tb}\n"
-        try:
-            with open(log_file, "a", encoding="utf-8") as f:
-                f.write(full_message)
-        except Exception as e:
-            print(f"FALLO AL ESCRIBIR EN EL LOG: {e}\nMENSAJE ORIGINAL: {full_message}")
+    def log_error(message: str, exc_info: bool = True):
+        logging.error(message, exc_info=exc_info)
 
     @staticmethod
     def _get_encryption_key() -> bytes:
@@ -166,11 +170,11 @@ class cimiento:
             except FileNotFoundError as e:
                 error_msg = f"No se encontró el archivo {x} para eliminar."
                 print(error_msg)
-                cimiento.log_error(f"{error_msg}\n{e}")
+                cimiento.log_error(f"{error_msg}: {e}", exc_info=True)
             except (PermissionError, OSError) as e:
                 error_msg = f"Ocurrió un error al eliminar el archivo {x}."
                 print(f"{error_msg}: {e}")
-                cimiento.log_error(f"{error_msg}\n{e}")
+                cimiento.log_error(f"{error_msg}: {e}", exc_info=True)
 
         print("Archivos eliminados.")
 
@@ -182,7 +186,7 @@ class cimiento:
             messagebox.showinfo("Función ejecutada.")
         except FileNotFoundError as e:
             messagebox.showerror("Error", "No se encontró el archivo raíz para ejecución asíncrona.")
-            cimiento.log_error(f"Fallo en ejecucion_asincrona: {e}")
+            cimiento.log_error(f"Fallo en ejecucion_asincrona: {e}", exc_info=True)
 
     @staticmethod
     def lectura_csv(documento: str) -> dict[str, str]:
@@ -261,7 +265,7 @@ class cimiento:
             if update_status:
                 error_msg = f"Error al crear entorno: {e}"
                 update_status(error_msg, 100)
-                cimiento.log_error(error_msg)
+                cimiento.log_error(error_msg, exc_info=True)
 
         return "Continuando..."
 
@@ -285,7 +289,7 @@ class cimiento:
         except (rq.exceptions.RequestException, rq.exceptions.HTTPError) as e:
             error_msg = "Sin conexión al servidor de verificación."
             print(f"{error_msg} (Err:3525k8)")
-            cimiento.log_error(f"{error_msg}\n{e}")
+            cimiento.log_error(f"{error_msg}: {e}", exc_info=True)
             return False
 
 
@@ -315,7 +319,7 @@ class CSVRepository:
         except Exception as e:
             error_msg = f"No se pudo leer el archivo {self.filepath.name}:\n{e}"
             messagebox.showerror("Error de Lectura", error_msg)
-            cimiento.log_error(f"Error en CSVRepository.read_all: {error_msg}")
+            cimiento.log_error(f"Error en CSVRepository.read_all: {error_msg}", exc_info=True)
             return []
 
     def write_all(self, data: list[list[str]]):
@@ -329,7 +333,7 @@ class CSVRepository:
         except Exception as e:
             error_msg = f"No se pudo escribir en el archivo {self.filepath.name}:\n{e}"
             messagebox.showerror("Error de Escritura", error_msg)
-            cimiento.log_error(f"Error en CSVRepository.write_all: {error_msg}")
+            cimiento.log_error(f"Error en CSVRepository.write_all: {error_msg}", exc_info=True)
             return False
 
     def append_row(self, row: list):
@@ -343,7 +347,7 @@ class CSVRepository:
         except Exception as e:
             error_msg = f"No se pudo añadir la fila al archivo {self.filepath.name}:\n{e}"
             messagebox.showerror("Error al Añadir", error_msg)
-            cimiento.log_error(f"Error en CSVRepository.append_row: {error_msg}")
+            cimiento.log_error(f"Error en CSVRepository.append_row: {error_msg}", exc_info=True)
             return False
 
     def get_next_id(self):
@@ -354,244 +358,251 @@ clientes_repo = CSVRepository("data_clientes.csv", ["Nombre", "RUT", "Direccion"
 insumos_repo = CSVRepository("data_productos.csv", ["Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "Costo", "Precio"])
 cotizaciones_repo = CSVRepository("data_cotizaciones.csv", ["Nro", "Fecha", "Estado", "Cliente", "PrecioTotal"])
 detalles_repo = CSVRepository("data_cotizaciones_detalle.csv", ["Nro_Cotizacion", "Cantidad", "Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "PrecioUnitario", "Subtotal"])
+class ClienteService:
+    @staticmethod
+    def cargar_todos():
+        return clientes_repo.read_all()
 
-# --- Lógica de Clientes ---
+    @staticmethod
+    def guardar(datos_cliente_nuevo):
+        rut_nuevo = datos_cliente_nuevo[1]
+        clientes_existentes = clientes_repo.read_all(skip_header=False)
 
-def cargar_clientes():
-    return clientes_repo.read_all()
+        if not clientes_existentes:
+            return clientes_repo.write_all([datos_cliente_nuevo])
 
-def guardar_cliente(datos_cliente_nuevo):
-    rut_nuevo = datos_cliente_nuevo[1]
-    clientes_existentes = clientes_repo.read_all(skip_header=False)
+        clientes_existentes.pop(0) # Quitar cabecera
+        
+        for i, cliente in enumerate(clientes_existentes):
+            if cliente and cliente[1] == rut_nuevo:
+                respuesta = messagebox.askyesno("RUT Duplicado", f"El RUT '{rut_nuevo}' ya existe. ¿Desea reemplazar los datos?")
+                if respuesta:
+                    clientes_existentes[i] = datos_cliente_nuevo
+                    return clientes_repo.write_all(clientes_existentes)
+                else:
+                    messagebox.showinfo("Operación cancelada", "Por favor, guarde el cliente con un RUT diferente.")
+                    return False
 
-    if not clientes_existentes:
-        return clientes_repo.write_all([datos_cliente_nuevo])
+        return clientes_repo.append_row(datos_cliente_nuevo)
 
-    clientes_existentes.pop(0) # Quitar cabecera
-    
-    for i, cliente in enumerate(clientes_existentes):
-        if cliente and cliente[1] == rut_nuevo:
-            respuesta = messagebox.askyesno("RUT Duplicado", f"El RUT '{rut_nuevo}' ya existe. ¿Desea reemplazar los datos?")
-            if respuesta:
-                clientes_existentes[i] = datos_cliente_nuevo
-                return clientes_repo.write_all(clientes_existentes)
-            else:
-                messagebox.showinfo("Operación cancelada", "Por favor, guarde el cliente con un RUT diferente.")
-                return False
+    @staticmethod
+    def cargar_por_nombre(nombre_cliente):
+        for cliente in ClienteService.cargar_todos():
+            if cliente and cliente[0] == nombre_cliente:
+                return cliente
+        return None
 
-    return clientes_repo.append_row(datos_cliente_nuevo)
+class InsumoService:
+    @staticmethod
+    def cargar_todos():
+        return insumos_repo.read_all()
 
-def cargar_datos_cliente_por_nombre(nombre_cliente):
-    for cliente in cargar_clientes():
-        if cliente and cliente[0] == nombre_cliente:
-            return cliente
-    return None
+    @staticmethod
+    def guardar(datos_insumo):
+        return insumos_repo.append_row(datos_insumo)
 
-# --- Lógica de Insumos ---
+class CotizacionService:
+    @staticmethod
+    def cargar_todas():
+        return cotizaciones_repo.read_all()
 
-def cargar_insumos():
-    return insumos_repo.read_all()
+    @staticmethod
+    def cargar_detalle(nro_cotizacion):
+        detalles_completos = detalles_repo.read_all()
+        detalles_filtrados = []
+        for row in detalles_completos:
+            if row and row[0] == str(nro_cotizacion):
+                # (Cantidad, Descripcion1, PrecioUnitario, Subtotal)
+                vista_detalle = (row[1], row[2], row[6], row[7])
+                detalles_filtrados.append(vista_detalle)
+        return detalles_filtrados
 
-def guardar_insumo(datos_insumo):
-    return insumos_repo.append_row(datos_insumo)
+    @staticmethod
+    def guardar_completa(cliente, total, detalles):
+        # 1. Guardar cabecera de cotización
+        nro_cotizacion = cotizaciones_repo.get_next_id()
+        
+        datos_cotizacion = [
+            nro_cotizacion,
+            datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "Pendiente",
+            cliente[0],  # Nombre del cliente
+            f"{total:.2f}"
+        ]
+        if not cotizaciones_repo.append_row(datos_cotizacion):
+            return 0 # Falla al guardar
 
-# --- Lógica de Cotizaciones ---
+        # 2. Guardar detalles
+        with open(detalles_repo.filepath, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            for item_id, valores_vista in detalles.items():
+                datos_insumo_completos = valores_vista['insumo_completo']
+                detalle_fila = [
+                    nro_cotizacion,
+                    valores_vista['vista'][0],  # Cantidad
+                    datos_insumo_completos[0],  # Desc1
+                    datos_insumo_completos[1],  # Desc2
+                    datos_insumo_completos[2],  # Desc3
+                    datos_insumo_completos[3],  # Unidad
+                    float(valores_vista['vista'][2]),  # Precio Unitario
+                    float(valores_vista['vista'][3])   # Subtotal
+                ]
+                writer.writerow(detalle_fila)
+        return nro_cotizacion
 
-def cargar_cotizaciones():
-    return cotizaciones_repo.read_all()
+    @staticmethod
+    def actualizar_completa(nro_cotizacion, cliente, total, detalles):
+        # 1. Actualizar cabecera
+        cotizaciones = cotizaciones_repo.read_all(skip_header=False)[1:] # Datos sin cabecera
+        
+        actualizado = False
+        for cotizacion in cotizaciones:
+            if cotizacion and cotizacion[0] == str(nro_cotizacion):
+                cotizacion[3] = cliente[0] # Nombre Cliente
+                cotizacion[4] = f"{total:.2f}" # Total
+                actualizado = True
+                break
+        
+        if not actualizado or not cotizaciones_repo.write_all(cotizaciones):
+            return False # Falla al actualizar cabecera
 
-def cargar_detalle_cotizacion(nro_cotizacion):
-    detalles_completos = detalles_repo.read_all()
-    detalles_filtrados = []
-    for row in detalles_completos:
-        if row and row[0] == str(nro_cotizacion):
-            # (Cantidad, Descripcion1, PrecioUnitario, Subtotal)
-            vista_detalle = (row[1], row[2], row[6], row[7])
-            detalles_filtrados.append(vista_detalle)
-    return detalles_filtrados
+        # 2. Borrar detalles antiguos y guardar los nuevos
+        detalles_existentes = detalles_repo.read_all()
+        # Filtra para mantener solo los detalles de OTRAS cotizaciones
+        detalles_filtrados = [d for d in detalles_existentes if d and d[0] != str(nro_cotizacion)]
 
-def guardar_cotizacion_completa(cliente, total, detalles):
-    # 1. Guardar cabecera de cotización
-    nro_cotizacion = cotizaciones_repo.get_next_id()
-    
-    datos_cotizacion = [
-        nro_cotizacion,
-        datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "Pendiente",
-        cliente[0],  # Nombre del cliente
-        f"{total:.2f}"
-    ]
-    if not cotizaciones_repo.append_row(datos_cotizacion):
-        return 0 # Falla al guardar
-
-    # 2. Guardar detalles
-    with open(detalles_repo.filepath, 'a', newline='', encoding='utf-8') as f:
-        writer = csv.writer(f)
+        # Añade los nuevos detalles de la cotización actual
         for item_id, valores_vista in detalles.items():
             datos_insumo_completos = valores_vista['insumo_completo']
-            detalle_fila = [
-                nro_cotizacion,
-                valores_vista['vista'][0],  # Cantidad
-                datos_insumo_completos[0],  # Desc1
-                datos_insumo_completos[1],  # Desc2
-                datos_insumo_completos[2],  # Desc3
-                datos_insumo_completos[3],  # Unidad
-                float(valores_vista['vista'][2]),  # Precio Unitario
-                float(valores_vista['vista'][3])   # Subtotal
-            ]
-            writer.writerow(detalle_fila)
-    return nro_cotizacion
+            detalle_fila = [nro_cotizacion, valores_vista['vista'][0], datos_insumo_completos[0], 
+                            datos_insumo_completos[1], datos_insumo_completos[2], datos_insumo_completos[3], 
+                            float(valores_vista['vista'][2]), float(valores_vista['vista'][3])]
+            detalles_filtrados.append(detalle_fila)
 
-def actualizar_cotizacion_completa(nro_cotizacion, cliente, total, detalles):
-    # 1. Actualizar cabecera
-    cotizaciones = cotizaciones_repo.read_all(skip_header=False)[1:] # Datos sin cabecera
-    
-    actualizado = False
-    for cotizacion in cotizaciones:
-        if cotizacion and cotizacion[0] == str(nro_cotizacion):
-            cotizacion[3] = cliente[0] # Nombre Cliente
-            cotizacion[4] = f"{total:.2f}" # Total
-            actualizado = True
-            break
-    
-    if not actualizado or not cotizaciones_repo.write_all(cotizaciones):
-        return False # Falla al actualizar cabecera
+        return detalles_repo.write_all(detalles_filtrados)
 
-    # 2. Borrar detalles antiguos y guardar los nuevos
-    detalles_existentes = detalles_repo.read_all()
-    # Filtra para mantener solo los detalles de OTRAS cotizaciones
-    detalles_filtrados = [d for d in detalles_existentes if d and d[0] != str(nro_cotizacion)]
-
-    # Añade los nuevos detalles de la cotización actual
-    for item_id, valores_vista in detalles.items():
-        datos_insumo_completos = valores_vista['insumo_completo']
-        detalle_fila = [nro_cotizacion, valores_vista['vista'][0], datos_insumo_completos[0], 
-                        datos_insumo_completos[1], datos_insumo_completos[2], datos_insumo_completos[3], 
-                        float(valores_vista['vista'][2]), float(valores_vista['vista'][3])]
-        detalles_filtrados.append(detalle_fila)
-
-    return detalles_repo.write_all(detalles_filtrados)
-
-def actualizar_campo_cotizacion(nro_cotizacion, columna_actualizar, nuevo_valor):
-    cotizaciones = cotizaciones_repo.read_all()
-    
-    for cotizacion in cotizaciones:
-        if cotizacion and cotizacion[0] == str(nro_cotizacion):
-            cotizacion[columna_actualizar] = nuevo_valor
-            break
-    return cotizaciones_repo.write_all(cotizaciones)
-
-def borrar_cotizacion_completa(nro_cotizacion):
-    # Borrar de data_cotizaciones.csv
-    cotizaciones = [c for c in cotizaciones_repo.read_all() if c and c[0] != str(nro_cotizacion)]
-    cotizaciones_repo.write_all(cotizaciones)
-
-    # Borrar de data_cotizaciones_detalle.csv
-    detalles = [d for d in detalles_repo.read_all() if d and d[0] != str(nro_cotizacion)]
-    detalles_repo.write_all(detalles)
-
-def generar_pdf(nro_cotizacion):
-    try:
-        # 1. Cargar todos los datos necesarios
-        cotizaciones = cargar_cotizaciones()
-        cotizacion_data = next((c for c in cotizaciones if c and c[0] == str(nro_cotizacion)), None)
-        if not cotizacion_data:
-            messagebox.showerror("Error", f"No se encontraron datos para la cotización N° {nro_cotizacion}.")
-            return
-
-        cliente_nombre = cotizacion_data[3]
-        cliente_data = cargar_datos_cliente_por_nombre(cliente_nombre)
-        if not cliente_data:
-            messagebox.showerror("Error", f"No se encontraron datos para el cliente '{cliente_nombre}'.")
-            return
-
-        detalles = cargar_detalle_cotizacion(nro_cotizacion)
-
-        # 2. Crear el archivo PDF
-        nombre_archivo = f"pdfs/Cotizacion_Nro_{nro_cotizacion}.pdf"
-        c = canvas.Canvas(nombre_archivo, pagesize=letter)
-        width, height = letter
-
-        # --- Cabecera del Documento ---
-        c.setFont("Helvetica-Bold", 16)
-        c.drawString(0.5 * inch, height - 0.5 * inch, "Nombre de tu Empresa") # Personalizable
+    @staticmethod
+    def actualizar_campo(nro_cotizacion, columna_actualizar, nuevo_valor):
+        cotizaciones = cotizaciones_repo.read_all()
         
-        c.setFont("Helvetica", 12)
-        c.drawString(0.5 * inch, height - 0.7 * inch, "Tu Dirección, Ciudad")
-        c.drawString(0.5 * inch, height - 0.9 * inch, "Tu Teléfono | tu.email@empresa.com")
+        for cotizacion in cotizaciones:
+            if cotizacion and cotizacion[0] == str(nro_cotizacion):
+                cotizacion[columna_actualizar] = nuevo_valor
+                break
+        return cotizaciones_repo.write_all(cotizaciones)
 
-        # Logo (opcional)
-        ruta_logo = os.getenv("ICONO_APP")
-        if ruta_logo and os.path.exists(ruta_logo):
-            try:
-                c.drawImage(ruta_logo, width - 2 * inch, height - 1 * inch, width=1.5*inch, preserveAspectRatio=True, mask='auto')
-            except Exception as e:
-                error_msg = f"No se pudo cargar el logo desde '{ruta_logo}': {e}"
-                print(error_msg)
-                cimiento.log_error(error_msg)
+    @staticmethod
+    def borrar_completa(nro_cotizacion):
+        # Borrar de data_cotizaciones.csv
+        cotizaciones = [c for c in cotizaciones_repo.read_all() if c and c[0] != str(nro_cotizacion)]
+        cotizaciones_repo.write_all(cotizaciones)
 
-        # --- Título y Datos de la Cotización ---
-        c.setFont("Helvetica-Bold", 20)
-        c.drawRightString(width - 0.5 * inch, height - 1.5 * inch, "COTIZACIÓN")
+        # Borrar de data_cotizaciones_detalle.csv
+        detalles = [d for d in detalles_repo.read_all() if d and d[0] != str(nro_cotizacion)]
+        detalles_repo.write_all(detalles)
 
-        c.setFont("Helvetica", 12)
-        c.drawRightString(width - 0.5 * inch, height - 1.7 * inch, f"N°: {nro_cotizacion}")
-        c.drawRightString(width - 0.5 * inch, height - 1.9 * inch, f"Fecha: {cotizacion_data[1].split(' ')[0]}")
+    @staticmethod
+    def generar_pdf(nro_cotizacion):
+        try:
+            # 1. Cargar todos los datos necesarios
+            cotizaciones = CotizacionService.cargar_todas()
+            cotizacion_data = next((c for c in cotizaciones if c and c[0] == str(nro_cotizacion)), None)
+            if not cotizacion_data:
+                messagebox.showerror("Error", f"No se encontraron datos para la cotización N° {nro_cotizacion}.")
+                return
 
-        # --- Datos del Cliente ---
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(0.5 * inch, height - 2.5 * inch, "Cliente:")
-        c.setFont("Helvetica", 12)
-        c.drawString(0.5 * inch, height - 2.7 * inch, f"Nombre: {cliente_data[0]}")
-        c.drawString(0.5 * inch, height - 2.9 * inch, f"RUT: {cliente_data[1]}")
-        c.drawString(0.5 * inch, height - 3.1 * inch, f"Dirección: {cliente_data[2]}")
-        c.drawString(0.5 * inch, height - 3.3 * inch, f"Correo: {cliente_data[4]}")
+            cliente_nombre = cotizacion_data[3]
+            cliente_data = ClienteService.cargar_por_nombre(cliente_nombre)
+            if not cliente_data:
+                messagebox.showerror("Error", f"No se encontraron datos para el cliente '{cliente_nombre}'.")
+                return
+            detalles = CotizacionService.cargar_detalle(nro_cotizacion)
 
-        # --- Tabla de Detalles ---
-        y_pos = height - 4 * inch
-        c.setFont("Helvetica-Bold", 11)
-        c.setFillColor(colors.darkblue)
-        c.rect(0.5*inch, y_pos - 0.05*inch, width - 1*inch, 0.25*inch, fill=1, stroke=0)
-        c.setFillColor(colors.white)
-        c.drawString(0.6 * inch, y_pos, "Cant.")
-        c.drawString(1.5 * inch, y_pos, "Descripción")
-        c.drawRightString(width - 2.5 * inch, y_pos, "P. Unitario")
-        c.drawRightString(width - 0.6 * inch, y_pos, "Subtotal")
-        
-        y_pos -= 0.3 * inch
-        c.setFillColor(colors.black)
-        c.setFont("Helvetica", 10)
+            # 2. Crear el archivo PDF
+            nombre_archivo = f"pdfs/Cotizacion_Nro_{nro_cotizacion}.pdf"
+            c = canvas.Canvas(nombre_archivo, pagesize=letter)
+            width, height = letter
 
-        for i, detalle in enumerate(detalles):
-            # (Cantidad, Descripcion, PrecioUnitario, Subtotal)
-            cantidad, desc, p_unit, subtotal = detalle
+            # --- Cabecera del Documento ---
+            c.setFont("Helvetica-Bold", 16)
+            c.drawString(0.5 * inch, height - 0.5 * inch, "Nombre de tu Empresa") # Personalizable
             
-            c.drawString(0.6 * inch, y_pos, str(cantidad))
-            c.drawString(1.5 * inch, y_pos, str(desc))
-            c.drawRightString(width - 2.5 * inch, y_pos, f"${float(p_unit):,.2f}")
-            c.drawRightString(width - 0.6 * inch, y_pos, f"${float(subtotal):,.2f}")
-            
-            # Línea divisoria
-            if i < len(detalles) - 1:
-                c.line(0.5 * inch, y_pos - 0.1 * inch, width - 0.5 * inch, y_pos - 0.1 * inch)
+            c.setFont("Helvetica", 12)
+            c.drawString(0.5 * inch, height - 0.7 * inch, "Tu Dirección, Ciudad")
+            c.drawString(0.5 * inch, height - 0.9 * inch, "Tu Teléfono | tu.email@empresa.com")
 
+            # Logo (opcional)
+            ruta_logo = os.getenv("ICONO_APP")
+            if ruta_logo and os.path.exists(ruta_logo):
+                try:
+                    c.drawImage(ruta_logo, width - 2 * inch, height - 1 * inch, width=1.5*inch, preserveAspectRatio=True, mask='auto')
+                except Exception as e:
+                    error_msg = f"No se pudo cargar el logo desde '{ruta_logo}': {e}"
+                    print(error_msg)
+                    cimiento.log_error(error_msg, exc_info=True)
+
+            # --- Título y Datos de la Cotización ---
+            c.setFont("Helvetica-Bold", 20)
+            c.drawRightString(width - 0.5 * inch, height - 1.5 * inch, "COTIZACIÓN")
+
+            c.setFont("Helvetica", 12)
+            c.drawRightString(width - 0.5 * inch, height - 1.7 * inch, f"N°: {nro_cotizacion}")
+            c.drawRightString(width - 0.5 * inch, height - 1.9 * inch, f"Fecha: {cotizacion_data[1].split(' ')[0]}")
+
+            # --- Datos del Cliente ---
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(0.5 * inch, height - 2.5 * inch, "Cliente:")
+            c.setFont("Helvetica", 12)
+            c.drawString(0.5 * inch, height - 2.7 * inch, f"Nombre: {cliente_data[0]}")
+            c.drawString(0.5 * inch, height - 2.9 * inch, f"RUT: {cliente_data[1]}")
+            c.drawString(0.5 * inch, height - 3.1 * inch, f"Dirección: {cliente_data[2]}")
+            c.drawString(0.5 * inch, height - 3.3 * inch, f"Correo: {cliente_data[4]}")
+
+            # --- Tabla de Detalles ---
+            y_pos = height - 4 * inch
+            c.setFont("Helvetica-Bold", 11)
+            c.setFillColor(colors.darkblue)
+            c.rect(0.5*inch, y_pos - 0.05*inch, width - 1*inch, 0.25*inch, fill=1, stroke=0)
+            c.setFillColor(colors.white)
+            c.drawString(0.6 * inch, y_pos, "Cant.")
+            c.drawString(1.5 * inch, y_pos, "Descripción")
+            c.drawRightString(width - 2.5 * inch, y_pos, "P. Unitario")
+            c.drawRightString(width - 0.6 * inch, y_pos, "Subtotal")
+            
             y_pos -= 0.3 * inch
+            c.setFillColor(colors.black)
+            c.setFont("Helvetica", 10)
 
-        # --- Total ---
-        c.setFont("Helvetica-Bold", 14)
-        c.drawRightString(width - 0.6 * inch, y_pos - 0.5 * inch, f"Total: ${float(cotizacion_data[4]):,.2f}")
+            for i, detalle in enumerate(detalles):
+                # (Cantidad, Descripcion, PrecioUnitario, Subtotal)
+                cantidad, desc, p_unit, subtotal = detalle
+                
+                c.drawString(0.6 * inch, y_pos, str(cantidad))
+                c.drawString(1.5 * inch, y_pos, str(desc))
+                c.drawRightString(width - 2.5 * inch, y_pos, f"${float(p_unit):,.2f}")
+                c.drawRightString(width - 0.6 * inch, y_pos, f"${float(subtotal):,.2f}")
+                
+                # Línea divisoria
+                if i < len(detalles) - 1:
+                    c.line(0.5 * inch, y_pos - 0.1 * inch, width - 0.5 * inch, y_pos - 0.1 * inch)
 
-        # --- Pie de Página ---
-        c.setFont("Helvetica-Oblique", 9)
-        c.drawString(0.5 * inch, 0.5 * inch, "Cotización válida por 15 días. Precios sujetos a cambio sin previo aviso.")
+                y_pos -= 0.3 * inch
 
-        c.save()
-        messagebox.showinfo("Éxito", f"PDF generado con éxito en:\n{os.path.abspath(nombre_archivo)}")
+            # --- Total ---
+            c.setFont("Helvetica-Bold", 14)
+            c.drawRightString(width - 0.6 * inch, y_pos - 0.5 * inch, f"Total: ${float(cotizacion_data[4]):,.2f}")
 
-    except Exception as e:
-        error_msg = f"Ocurrió un error inesperado al generar el PDF:\n{e}"
-        messagebox.showerror("Error al generar PDF", error_msg)
-        cimiento.log_error(error_msg)
+            # --- Pie de Página ---
+            c.setFont("Helvetica-Oblique", 9)
+            c.drawString(0.5 * inch, 0.5 * inch, "Cotización válida por 15 días. Precios sujetos a cambio sin previo aviso.")
+
+            c.save()
+            messagebox.showinfo("Éxito", f"PDF generado con éxito en:\n{os.path.abspath(nombre_archivo)}")
+
+        except Exception as e:
+            error_msg = f"Ocurrió un error inesperado al generar el PDF:\n{e}"
+            messagebox.showerror("Error al generar PDF", error_msg)
+            cimiento.log_error(error_msg, exc_info=True)
 
 # ---------- "Componentes Base de la UI" ----------
 class VistaBase:
@@ -664,7 +675,7 @@ class VentanaPrincipal:
             except Exception as e:
                 error_msg = f"Error al cargar el icono: {e}"
                 print(error_msg)
-                cimiento.log_error(error_msg)
+                cimiento.log_error(error_msg, exc_info=True)
 
         # --- Contenedor Principal para los frames ---
         self.container = ttk.Frame(self.ventana)
@@ -726,7 +737,7 @@ class VentanaPrincipal:
             except Exception as e:
                 error_msg = f"Error al cargar la imagen de fondo: {e}"
                 print(error_msg)
-                cimiento.log_error(error_msg)
+                cimiento.log_error(error_msg, exc_info=True)
         elif self.bg_image_label:
             self.bg_image_label.destroy()
             self.bg_image_label = None
@@ -792,7 +803,7 @@ class VentanaClientes(ttk.Frame, VistaBase):
 
         datos_cliente = [nombre, rut, direccion, telefono, correo]
         
-        guardado_exitoso = guardar_cliente(datos_cliente)
+        guardado_exitoso = ClienteService.guardar(datos_cliente)
         
         if guardado_exitoso:
             messagebox.showinfo("Éxito", "Cliente guardado correctamente.")
@@ -836,11 +847,11 @@ class VentanaSeleccionarCliente(Ventana):
         self.tree.pack(expand=True, fill='both', padx=10, pady=10)
         self.cargar_clientes_csv()
 
-        # --- Evento de selección ---
+        # --- Evento de selección --- 
         self.tree.bind("<Double-1>", self.on_cliente_seleccionado)
 
     def cargar_clientes_csv(self):
-        clientes = cargar_clientes()
+        clientes = ClienteService.cargar_todos()
         for cliente in clientes:
             self.tree.insert("", tk.END, values=cliente)
 
@@ -1028,7 +1039,7 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
 
         if self.nro_cotizacion_editando:
             # Lógica para actualizar
-            exito = actualizar_cotizacion_completa(
+            exito = CotizacionService.actualizar_completa(
                 self.nro_cotizacion_editando, self.cliente_seleccionado, self.total_cotizacion, self.detalle_data
             )
             if exito:
@@ -1038,7 +1049,7 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
                 messagebox.showerror("Error", "No se pudo actualizar la cotización.")
         else:
             # Lógica para guardar una nueva
-            nro_cotizacion = guardar_cotizacion_completa(
+            nro_cotizacion = CotizacionService.guardar_completa(
                 self.cliente_seleccionado, self.total_cotizacion, self.detalle_data
             )
             if nro_cotizacion > 0:
@@ -1057,7 +1068,7 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
 
     def cargar_cotizacion_para_edicion(self):
         # 1. Cargar cabecera
-        cotizaciones = cargar_cotizaciones()
+        cotizaciones = CotizacionService.cargar_todas()
         cotizacion_data = next((c for c in cotizaciones if c[0] == str(self.nro_cotizacion_editando)), None)
         if not cotizacion_data:
             messagebox.showerror("Error", f"No se encontró la cotización N° {self.nro_cotizacion_editando}")
@@ -1065,12 +1076,12 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
 
         # 2. Cargar cliente
         nombre_cliente = cotizacion_data[3] # Columna Cliente
-        self.cliente_seleccionado = cargar_datos_cliente_por_nombre(nombre_cliente)
+        self.cliente_seleccionado = ClienteService.cargar_por_nombre(nombre_cliente)
         if self.cliente_seleccionado:
             self.seleccionar_cliente(self.cliente_seleccionado)
 
         # 3. Cargar detalles
-        insumos_cargados = cargar_insumos()
+        insumos_cargados = InsumoService.cargar_todos()
 
         for detalle_fila in detalles_repo.read_all():
             if detalle_fila and detalle_fila[0] == str(self.nro_cotizacion_editando):
@@ -1102,7 +1113,7 @@ class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
         for col in columnas_cot:
             self.tree_cotizaciones.heading(col, text=col)
         self.tree_cotizaciones.pack(fill="both", expand=True)
-        self.cargar_cotizaciones()
+        self.cargar_todas_cotizaciones()
         self.tree_cotizaciones.bind("<Double-1>", self.mostrar_detalle)
 
         # 2. Frame de Acciones
@@ -1132,8 +1143,8 @@ class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
             self.tree_detalle_cot.heading(col, text=col)
         self.tree_detalle_cot.pack(fill="both", expand=True)
 
-    def cargar_cotizaciones(self):
-        cotizaciones = cargar_cotizaciones()
+    def cargar_todas_cotizaciones(self):
+        cotizaciones = CotizacionService.cargar_todas()
         for cot in cotizaciones:
             self.tree_cotizaciones.insert("", "end", values=cot)
 
@@ -1148,7 +1159,7 @@ class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
         
         nro_cotizacion_seleccionada = self.tree_cotizaciones.item(item_seleccionado)['values'][0]
 
-        detalles = cargar_detalle_cotizacion(nro_cotizacion_seleccionada)
+        detalles = CotizacionService.cargar_detalle(nro_cotizacion_seleccionada)
         for detalle in detalles:
             self.tree_detalle_cot.insert("", "end", values=detalle)
 
@@ -1165,7 +1176,7 @@ class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
         nuevo_estado = simpledialog.askstring("Editar Estado", "Ingrese el nuevo estado:", initialvalue=estado_actual)
 
         if nuevo_estado:
-            actualizar_campo_cotizacion(nro_cotizacion, 2, nuevo_estado)
+            CotizacionService.actualizar_campo(nro_cotizacion, 2, nuevo_estado)
             self.recargar_cotizaciones()
 
     def editar_contenido_cotizacion(self):
@@ -1187,7 +1198,7 @@ class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
 
         nro_cotizacion = self.tree_cotizaciones.item(item_seleccionado)['values'][0]
         
-        generar_pdf(nro_cotizacion)
+        CotizacionService.generar_pdf(nro_cotizacion)
 
     def borrar_cotizacion(self):
         item_seleccionado = self.tree_cotizaciones.focus()
@@ -1201,7 +1212,7 @@ class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
         confirmar = messagebox.askyesno("Confirmar Borrado", f"¿Está seguro de que desea eliminar la cotización N° {nro_cotizacion} y todos sus detalles? Esta acción no se puede deshacer.")
 
         if confirmar:
-            borrar_cotizacion_completa(nro_cotizacion)
+            CotizacionService.borrar_completa(nro_cotizacion)
             
             messagebox.showinfo("Éxito", f"Cotización N° {nro_cotizacion} eliminada correctamente.")
             self.recargar_cotizaciones()
@@ -1213,7 +1224,7 @@ class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
         """Limpia y vuelve a cargar el treeview de cotizaciones."""
         for i in self.tree_cotizaciones.get_children():
             self.tree_cotizaciones.delete(i)
-        self.cargar_cotizaciones()
+        self.cargar_todas_cotizaciones()
 
 
 class VentanaInsumos(ttk.Frame, VistaBase):
@@ -1276,7 +1287,7 @@ class VentanaInsumos(ttk.Frame, VistaBase):
             self.dataprecio.get("1.0", tk.END).strip()
         ]
 
-        if guardar_insumo(datos_insumo):
+        if InsumoService.guardar(datos_insumo):
             messagebox.showinfo("Éxito", "Insumo guardado correctamente.")
             self.limpiar_campos()
 
@@ -1310,7 +1321,7 @@ class VentanaSeleccionarInsumo(Ventana):
         self.tree.bind("<Double-1>", self.on_insumo_seleccionado)
 
     def cargar_insumos_csv(self):
-        insumos = cargar_insumos()
+        insumos = InsumoService.cargar_todos()
         for insumo in insumos:
             self.tree.insert("", tk.END, values=insumo)
 
@@ -1417,7 +1428,7 @@ class VentanaConfiguracion(ttk.Frame, VistaBase):
             except Exception as e:
                 error_msg = f"Falló la re-encriptación de {clientes_repo.filepath.name}.\nError: {e}"
                 messagebox.showerror("Error de Re-encriptación", error_msg)
-                cimiento.log_error(error_msg)
+                cimiento.log_error(error_msg, exc_info=True)
                 set_key(".env", "MASTER_KEY", old_master_key_b64) # Revertir clave si falla
                 return
 
@@ -1441,6 +1452,9 @@ class VentanaConfiguracion(ttk.Frame, VistaBase):
 # # --- INICIO DE LA APLICACIÓN ---
 # ############################################################################
 if __name__ == "__main__":
+
+    # --- Configurar Logging ---
+    setup_logging()
     
     # --- Ventana de Carga (Splash Screen) ---
     splash_root = tk.Tk()
