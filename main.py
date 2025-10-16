@@ -7,12 +7,16 @@ def virtualizado():
     return sys.prefix != sys.base_prefix
 
 def libSetup(*libs, update_status=None):
+    """Instala librerías si no están presentes, con soporte para nombres de paquete específicos de pip y apt."""
     for entry in libs:
-        if isinstance(entry, tuple):
+        if isinstance(entry, tuple) and len(entry) == 3:
+            lib, pip_pkg, apt_pkg = entry
+        elif isinstance(entry, tuple) and len(entry) == 2:
             lib, apt_pkg = entry
+            pip_pkg = lib  # Asumir que el nombre de pip es el mismo que el de importación
         else:
-            lib, apt_pkg = entry, None
-
+            lib, pip_pkg, apt_pkg = entry, entry, None
+        
         try:
             importlib.import_module(lib)
             if update_status:
@@ -26,16 +30,16 @@ def libSetup(*libs, update_status=None):
                 try:
                     subprocess.check_call(['sudo', 'apt', 'install', '-y', apt_pkg])
                 except subprocess.CalledProcessError:
-                    subprocess.check_call([sys.executable, '-m', 'pip', 'install', lib])
+                    subprocess.check_call([sys.executable, '-m', 'pip', 'install', pip_pkg])
             else:
-                subprocess.check_call([sys.executable, '-m', 'pip', 'install', lib])
-            
+                subprocess.check_call([sys.executable, '-m', 'pip', 'install', pip_pkg])
+
             if update_status:
                 update_status(f"Librería '{lib}' instalada.", 100)
 
 # Lista a instalar (incluyendo 'tkinter' para asegurar su disponibilidad)
 # ---> Sublista (opcion 1, opcion 2)
-LIBS_A_INSTALAR = ['tkinter', 'warnings','pandas','dotenv','requests',('bs4', 'python3-bs4'), 'sv_ttk', 'reportlab']
+LIBS_A_INSTALAR = ['tkinter', 'warnings','pandas','dotenv','requests',('bs4', 'beautifulsoup4', 'python3-bs4'), 'sv_ttk', 'reportlab']
 
 # Ejecutar libSetup para todas las librerías antes de cualquier importación de UI
 libSetup(*LIBS_A_INSTALAR)
@@ -960,7 +964,6 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
             self.seleccionar_cliente(self.cliente_seleccionado)
 
         # 3. Cargar detalles
-        detalles_completos = CSVRepository.read_all("data_cotizaciones_detalle.csv")
         insumos_cargados = cargar_insumos()
 
         for detalle_fila in detalles_repo.read_all():
