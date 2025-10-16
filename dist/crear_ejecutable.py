@@ -24,32 +24,9 @@ def encontrar_icono(assets_dir: Path) -> str | None:
         print(f"No se pudo buscar el icono: {e}")
     return None
 
-def listar_scripts() -> list[str]:
-    """Lista los archivos .py y .pyw en el directorio actual, excluyendo este script."""
-    scripts = [
-        f for f in os.listdir() 
-        if f.endswith(('.py', '.pyw')) and f != os.path.basename(__file__)
-    ]
-    return scripts
-
-def elegir_script(scripts: list[str]) -> str:
-    """Permite al usuario seleccionar un script de una lista."""
-    print("Seleccione el archivo principal que desea convertir a ejecutable:\n")
-    for idx, script in enumerate(scripts, 1):
-        print(f"{idx}: {script}")
-
-    while True:
-        try:
-            seleccion = int(input("\nIngrese el número del archivo: "))
-            if 1 <= seleccion <= len(scripts):
-                return scripts[seleccion - 1]
-            else:
-                print("Número fuera de rango. Intente nuevamente.")
-        except ValueError:
-            print("Entrada no válida. Ingrese un número.")
-
-def crear_exe(archivo_script: str):
+def crear_exe():
     """Crea el ejecutable usando PyInstaller con las opciones adecuadas."""
+    archivo_script = "main.pyw"
     print("\n--- Iniciando la creación del ejecutable ---")
     
     # Opciones base de PyInstaller
@@ -64,6 +41,9 @@ def crear_exe(archivo_script: str):
     icono = encontrar_icono(Path("assets"))
     if icono:
         comando.extend(["--icon", icono])
+
+    # Forzar la inclusión del módulo sv_ttk que PyInstaller podría no detectar
+    comando.extend(["--hidden-import", "sv_ttk"])
 
     # Añadir carpetas de datos y assets
     comando.extend(["--add-data", f"data{os.pathsep}data"])
@@ -91,9 +71,5 @@ def crear_exe(archivo_script: str):
     input("\nPresione Enter para salir...")
 
 if __name__ == "__main__":
-    scripts_disponibles = listar_scripts()
-    if not scripts_disponibles:
-        print("No se encontraron archivos .py o .pyw para compilar en esta carpeta.")
-    else:
-        script_elegido = elegir_script(scripts_disponibles)
-        crear_exe(script_elegido)
+    # Ahora el script de compilación es más simple y directo.
+    crear_exe()
