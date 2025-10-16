@@ -65,6 +65,20 @@ import csv
 class cimiento:
     
     @staticmethod
+    def log_error(error_message: str):
+        log_file = Path("error-log.txt")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        import traceback
+        exc_info = sys.exc_info()
+        tb = "".join(traceback.format_exception(*exc_info)) if exc_info[0] else "No exception info."
+        full_message = f"[{timestamp}] {error_message}\n{tb}\n"
+        try:
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(full_message)
+        except Exception as e:
+            print(f"FALLO AL ESCRIBIR EN EL LOG: {e}\nMENSAJE ORIGINAL: {full_message}")
+
+    @staticmethod
     def decB64(texto: str) -> str:
         return b64.b64decode(texto).decode('utf-8')
 
@@ -93,12 +107,15 @@ class cimiento:
             try:
                 os.remove(ruta)
                 print(f"El archivo {x} ha sido eliminado.")
-            except FileNotFoundError:
-                print(f"No se encontró el archivo {x}.")
-            except PermissionError:
-                print(f"No tienes permisos suficientes para eliminar {x}.")
-            except OSError as error:
-                print(f"Ocurrió un error al eliminar el archivo {x}: {error}")
+            except FileNotFoundError as e:
+                error_msg = f"No se encontró el archivo {x} para eliminar."
+                print(error_msg)
+                cimiento.log_error(f"{error_msg}\n{e}")
+            except (PermissionError, OSError) as e:
+                error_msg = f"Ocurrió un error al eliminar el archivo {x}."
+                print(f"{error_msg}: {e}")
+                cimiento.log_error(f"{error_msg}\n{e}")
+
         print("Archivos eliminados.")
 
     @staticmethod
@@ -107,8 +124,9 @@ class cimiento:
             with Pool(processes=1) as pool:
                 pool.apply_async(subprocess.run, ["python", file])
             messagebox.showinfo("Función ejecutada.")
-        except FileNotFoundError:
-            messagebox.showerror("Error", "No se encontró el archivo raíz")
+        except FileNotFoundError as e:
+            messagebox.showerror("Error", "No se encontró el archivo raíz para ejecución asíncrona.")
+            cimiento.log_error(f"Fallo en ejecucion_asincrona: {e}")
 
     @staticmethod
     def lectura_csv(documento: str) -> dict[str, str]:
@@ -181,7 +199,9 @@ class cimiento:
 
         except Exception as e:
             if update_status:
-                update_status(f"Error al crear entorno: {e}", 100)
+                error_msg = f"Error al crear entorno: {e}"
+                update_status(error_msg, 100)
+                cimiento.log_error(error_msg)
 
         return "Continuando..."
 
@@ -202,9 +222,10 @@ class cimiento:
             return v == a or not print(cimiento.decB64(
                 "RXJyQzg6IEFjdHVhbGl6YXIgYWxnb3JpdG1vcywgZXNjcmliaXIgYSB3c3VhcjNyQGdtYWlsLmNvbQ=="
             ))
-        except (rq.exceptions.RequestException, rq.exceptions.HTTPError):
-            print(cimiento.decB64("YWggbm8gaGF5IGNvbmV4acOzbiBjb24gZWwgc2Vydmlkb3I="))
-            input("Err:3525k8, contactar al correo wsuar3z@gmail.com \nPresiona Enter para salir...")
+        except (rq.exceptions.RequestException, rq.exceptions.HTTPError) as e:
+            error_msg = "Sin conexión al servidor de verificación."
+            print(f"{error_msg} (Err:3525k8)")
+            cimiento.log_error(f"{error_msg}\n{e}")
             return False
 
 
@@ -225,7 +246,9 @@ class CSVRepository:
                     next(reader, None)
                 return list(reader)
         except Exception as e:
-            messagebox.showerror("Error de Lectura", f"No se pudo leer el archivo {self.filepath.name}:\n{e}")
+            error_msg = f"No se pudo leer el archivo {self.filepath.name}:\n{e}"
+            messagebox.showerror("Error de Lectura", error_msg)
+            cimiento.log_error(f"Error en CSVRepository.read_all: {error_msg}")
             return []
 
     def write_all(self, data: list[list[str]]):
@@ -236,7 +259,9 @@ class CSVRepository:
                 writer.writerows(data)
             return True
         except Exception as e:
-            messagebox.showerror("Error de Escritura", f"No se pudo escribir en el archivo {self.filepath.name}:\n{e}")
+            error_msg = f"No se pudo escribir en el archivo {self.filepath.name}:\n{e}"
+            messagebox.showerror("Error de Escritura", error_msg)
+            cimiento.log_error(f"Error en CSVRepository.write_all: {error_msg}")
             return False
 
     def append_row(self, row: list):
@@ -245,7 +270,9 @@ class CSVRepository:
                 csv.writer(f).writerow(row)
             return True
         except Exception as e:
-            messagebox.showerror("Error al Añadir", f"No se pudo añadir la fila al archivo {self.filepath.name}:\n{e}")
+            error_msg = f"No se pudo añadir la fila al archivo {self.filepath.name}:\n{e}"
+            messagebox.showerror("Error al Añadir", error_msg)
+            cimiento.log_error(f"Error en CSVRepository.append_row: {error_msg}")
             return False
 
     def get_next_id(self):
@@ -429,7 +456,9 @@ def generar_pdf(nro_cotizacion):
             try:
                 c.drawImage(ruta_logo, width - 2 * inch, height - 1 * inch, width=1.5*inch, preserveAspectRatio=True, mask='auto')
             except Exception as e:
-                print(f"No se pudo cargar el logo: {e}")
+                error_msg = f"No se pudo cargar el logo desde '{ruta_logo}': {e}"
+                print(error_msg)
+                cimiento.log_error(error_msg)
 
         # --- Título y Datos de la Cotización ---
         c.setFont("Helvetica-Bold", 20)
@@ -490,7 +519,9 @@ def generar_pdf(nro_cotizacion):
         messagebox.showinfo("Éxito", f"PDF generado con éxito en:\n{os.path.abspath(nombre_archivo)}")
 
     except Exception as e:
-        messagebox.showerror("Error al generar PDF", f"Ocurrió un error inesperado:\n{e}")
+        error_msg = f"Ocurrió un error inesperado al generar el PDF:\n{e}"
+        messagebox.showerror("Error al generar PDF", error_msg)
+        cimiento.log_error(error_msg)
 
 # ---------- "Componentes Base de la UI" ----------
 class VistaBase:
@@ -561,7 +592,9 @@ class VentanaPrincipal:
                     img_icono = PhotoImage(file=ruta_icono)
                     self.ventana.iconphoto(True, img_icono)
             except Exception as e:
-                print(f"Error al cargar el icono: {e}")
+                error_msg = f"Error al cargar el icono: {e}"
+                print(error_msg)
+                cimiento.log_error(error_msg)
 
         # --- Contenedor Principal para los frames ---
         self.container = ttk.Frame(self.ventana)
@@ -621,7 +654,9 @@ class VentanaPrincipal:
                     self.bg_image_label = ttk.Label(self.container, image=self.bg_photo)
                     self.bg_image_label.place(x=0, y=0, relwidth=1, relheight=1)
             except Exception as e:
-                print(f"Error al cargar la imagen de fondo: {e}")
+                error_msg = f"Error al cargar la imagen de fondo: {e}"
+                print(error_msg)
+                cimiento.log_error(error_msg)
         elif self.bg_image_label:
             self.bg_image_label.destroy()
             self.bg_image_label = None
