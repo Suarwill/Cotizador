@@ -1,0 +1,5 @@
+sv-ttk
+python-dotenv
+requests
+beautifulsoup4
+reportlab

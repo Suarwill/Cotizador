@@ -39,7 +39,7 @@ def libSetup(*libs, update_status=None):
 
 # Lista a instalar (incluyendo 'tkinter' para asegurar su disponibilidad)
 # ---> Sublista (opcion 1, opcion 2)
-LIBS_A_INSTALAR = ['tkinter', 'sv_ttk', 'warnings','dotenv','requests',('bs4', 'beautifulsoup4', 'python3-bs4'), 'reportlab']
+LIBS_A_INSTALAR = ['tkinter', ('sv_ttk', 'sv-ttk', None), 'warnings','dotenv','requests',('bs4', 'beautifulsoup4', 'python3-bs4'), 'reportlab']
 
 # Ejecutar libSetup para todas las librerías antes de cualquier importación de UI
 libSetup(*LIBS_A_INSTALAR)
