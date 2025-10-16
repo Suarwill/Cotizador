@@ -245,6 +245,12 @@ class CSVRepository:
                 if skip_header:
                     next(reader, None)
                 return list(reader)
+                
+                decrypted_data = []
+                for row in reader:
+                    decrypted_row = [cimiento.codec(cell, cif=False) for cell in row]
+                    decrypted_data.append(decrypted_row)
+                return decrypted_data
         except Exception as e:
             error_msg = f"No se pudo leer el archivo {self.filepath.name}:\n{e}"
             messagebox.showerror("Error de Lectura", error_msg)
@@ -252,11 +258,12 @@ class CSVRepository:
             return []
 
     def write_all(self, data: list[list[str]]):
+        encrypted_data = [[cimiento.codec(str(cell)) for cell in row] for row in data]
         try:
             with open(self.filepath, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 writer.writerow(self.headers)
-                writer.writerows(data)
+                writer.writerows(encrypted_data)
             return True
         except Exception as e:
             error_msg = f"No se pudo escribir en el archivo {self.filepath.name}:\n{e}"
@@ -265,9 +272,10 @@ class CSVRepository:
             return False
 
     def append_row(self, row: list):
+        encrypted_row = [cimiento.codec(str(cell)) for cell in row]
         try:
             with open(self.filepath, 'a', newline='', encoding='utf-8') as f:
-                csv.writer(f).writerow(row)
+                csv.writer(f).writerow(encrypted_row)
             return True
         except Exception as e:
             error_msg = f"No se pudo añadir la fila al archivo {self.filepath.name}:\n{e}"
