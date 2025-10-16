@@ -308,12 +308,24 @@ class CSVRepository:
                 reader = csv.reader(f)
                 if skip_header:
                     next(reader, None)
-                return list(reader)
+                
+                data = list(reader)
 
+                if not self.encrypted:
+                    return data
+
+                # Si está encriptado, desencriptar cada celda
                 decrypted_data = []
-                for row in reader:
-                    decrypted_row = [cimiento.decrypt(cell) if cell else "" for cell in row]
-                    decrypted_data.append(decrypted_row)
+                for i, row in enumerate(data):
+                    try:
+                        decrypted_row = [cimiento.decrypt(cell) if cell else "" for cell in row]
+                        decrypted_data.append(decrypted_row)
+                    except Exception as e:
+                        error_msg = f"Fallo al desencriptar la fila {i+1} en {self.filepath.name}. Contenido: {row}"
+                        print(f"ERROR: {error_msg} - {e}")
+                        cimiento.log_error(error_msg, exc_info=False)
+                        # Añadir una fila de error para no romper la UI
+                        decrypted_data.append(['ERROR DE LECTURA'] * len(self.headers))
                 return decrypted_data
         except Exception as e:
             error_msg = f"No se pudo leer el archivo {self.filepath.name}:\n{e}"
@@ -322,12 +334,14 @@ class CSVRepository:
             return []
 
     def write_all(self, data: list[list[str]]):
-        encrypted_data = [[cimiento.encrypt(str(cell)) if cell is not None else "" for cell in row] for row in data]
+        data_to_write = data
+        if self.encrypted:
+            data_to_write = [[cimiento.encrypt(str(cell)) if cell is not None else "" for cell in row] for row in data]
         try:
             with open(self.filepath, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 writer.writerow(self.headers)
-                writer.writerows(encrypted_data)
+                writer.writerows(data_to_write)
             return True
         except Exception as e:
             error_msg = f"No se pudo escribir en el archivo {self.filepath.name}:\n{e}"
@@ -336,12 +350,11 @@ class CSVRepository:
             return False
 
     def append_row(self, row: list):
-        row_to_append = row
         if self.encrypted:
-            row_to_append = [cimiento.encrypt(str(cell)) if cell is not None else "" for cell in row]
+            row = [cimiento.encrypt(str(cell)) if cell is not None else "" for cell in row]
         try:
             with open(self.filepath, 'a', newline='', encoding='utf-8') as f:
-                csv.writer(f).writerow(row_to_append)
+                csv.writer(f).writerow(row)
             return True
         except Exception as e:
             error_msg = f"No se pudo añadir la fila al archivo {self.filepath.name}:\n{e}"
@@ -366,13 +379,10 @@ class ClienteService:
     @staticmethod
     def guardar(datos_cliente_nuevo):
         rut_nuevo = datos_cliente_nuevo[1]
-        clientes_existentes = clientes_repo.read_all(skip_header=False)
+        # Leemos los clientes (ya desencriptados) para buscar duplicados
+        clientes_existentes = ClienteService.cargar_todos()
 
-        if not clientes_existentes:
-            return clientes_repo.write_all([datos_cliente_nuevo])
-
-        clientes_existentes.pop(0) # Quitar cabecera
-        
+        cliente_encontrado = False
         for i, cliente in enumerate(clientes_existentes):
             if cliente and cliente[1] == rut_nuevo:
                 respuesta = messagebox.askyesno("RUT Duplicado", f"El RUT '{rut_nuevo}' ya existe. ¿Desea reemplazar los datos?")
@@ -382,8 +392,11 @@ class ClienteService:
                 else:
                     messagebox.showinfo("Operación cancelada", "Por favor, guarde el cliente con un RUT diferente.")
                     return False
+                cliente_encontrado = True
+                break
 
-        return clientes_repo.append_row(datos_cliente_nuevo)
+        if not cliente_encontrado:
+            return clientes_repo.append_row(datos_cliente_nuevo)
 
     @staticmethod
     def cargar_por_nombre(nombre_cliente):
