@@ -1,6 +1,17 @@
 import subprocess
 import os
 from pathlib import Path
+import sys
+
+def obtener_ruta_sv_ttk() -> str | None:
+    """Encuentra la ruta del paquete sv_ttk para incluir sus archivos de tema."""
+    try:
+        import sv_ttk
+        # La ruta a la carpeta que contiene los archivos del tema
+        return str(Path(sv_ttk.__file__).parent)
+    except ImportError:
+        print("Advertencia: El paquete 'sv-ttk' no está instalado en este entorno.")
+        return None
 
 def encontrar_icono(assets_dir: Path) -> str | None:
     """Busca un archivo .ico en el directorio de assets."""
@@ -57,6 +68,12 @@ def crear_exe(archivo_script: str):
     # Añadir carpetas de datos y assets
     comando.extend(["--add-data", f"data{os.pathsep}data"])
     comando.extend(["--add-data", f"assets{os.pathsep}assets"])
+
+    # Añadir los archivos del tema sv_ttk
+    ruta_sv_ttk = obtener_ruta_sv_ttk()
+    if ruta_sv_ttk:
+        # El nombre del destino debe ser 'sv_ttk' para que el paquete lo encuentre
+        comando.extend(["--add-data", f"{ruta_sv_ttk}{os.pathsep}sv_ttk"])
 
     # Añadir el script principal
     comando.append(archivo_script)
