@@ -1323,18 +1323,19 @@ class VentanaInsumos(ttk.Frame, VistaBase):
         datos_frame = ttk.LabelFrame(self, text="Datos del Insumo")
         datos_frame.grid(row=0, column=0, padx=20, pady=10, sticky="nsew")
         self.grid_columnconfigure(0, weight=1)
+        datos_frame.grid_columnconfigure(1, weight=1) # Permitir que la columna 1 se expanda
 
         self.crear_etiqueta(datos_frame, "Descripción 1:", 0, 0)
         self.datadesc1 = self.crear_entrada_texto(datos_frame, 40, 1)
-        self.datadesc1.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        self.datadesc1.grid(row=0, column=1, columnspan=3, padx=5, pady=5, sticky="ew")
 
         self.crear_etiqueta(datos_frame, "Descripción 2:", 1, 0)
         self.datadesc2 = self.crear_entrada_texto(datos_frame, 40, 1)
-        self.datadesc2.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        self.datadesc2.grid(row=1, column=1, columnspan=3, padx=5, pady=5, sticky="ew")
 
         self.crear_etiqueta(datos_frame, "Descripción 3:", 2, 0)
         self.datadesc3 = self.crear_entrada_texto(datos_frame, 40, 1)
-        self.datadesc3.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
+        self.datadesc3.grid(row=2, column=1, columnspan=3, padx=5, pady=5, sticky="ew")
 
         self.crear_etiqueta(datos_frame, "Unidad:", 3, 0)
         self.dataunidad = self.crear_entrada_texto(datos_frame, 40, 1)
@@ -1344,11 +1345,9 @@ class VentanaInsumos(ttk.Frame, VistaBase):
         self.datacosto = self.crear_entrada_texto(datos_frame, 40, 1)
         self.datacosto.grid(row=4, column=1, padx=5, pady=5, sticky="ew")
 
-        self.crear_etiqueta(datos_frame, "Precio:", 5, 0)
+        self.crear_etiqueta(datos_frame, "Precio:", 4, 2)
         self.dataprecio = self.crear_entrada_texto(datos_frame, 40, 1)
-        self.dataprecio.grid(row=5, column=1, padx=5, pady=5, sticky="ew")
-
-        datos_frame.grid_columnconfigure(1, weight=1)
+        self.dataprecio.grid(row=4, column=3, padx=5, pady=5, sticky="ew")
 
         # --- Frame de Acciones ---
         acciones_frame = ttk.LabelFrame(self, text="Acciones")
