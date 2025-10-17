@@ -1361,8 +1361,6 @@ class VentanaInsumos(ttk.Frame, VistaBase):
         self.dataprecio = self.crear_entrada_texto(datos_frame, 40, 1)
         self.dataprecio.grid(row=5, column=3, padx=5, pady=5, sticky="ew")
 
-
-
         # --- Frame de Acciones ---
         acciones_frame = ttk.LabelFrame(self, text="Acciones")
         acciones_frame.grid(row=2, column=0, padx=20, pady=10, sticky="nsew")
@@ -1485,7 +1483,6 @@ class VentanaDatosEmpresa(ttk.Frame, VistaBase):
         set_key(".env", "EMPRESA_CONTACTO", self.contacto_empresa.get("1.0", tk.END).strip())
         messagebox.showinfo("Guardado", "Los datos de la empresa se han actualizado correctamente.")
         self.destroy()
-
 
 class VentanaConfiguracion(ttk.Frame, VistaBase):
     def __init__(self, parent, controller):
