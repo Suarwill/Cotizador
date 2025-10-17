@@ -219,7 +219,7 @@ class cimiento:
                 update_status(f"Archivo {ruta_archivo.name} creado.", 100)
 
     @staticmethod
-    def creacion_entorno(update_status=None):
+    def creacion_entorno(update_status=None, root_for_dialog=None):
         def _update(message, progress):
             if update_status:
                 update_status(message, progress)
@@ -228,17 +228,34 @@ class cimiento:
             _update("Verificando archivo .env...", 0)
             env_path = Path(".env")
             if not env_path.exists():
+                if root_for_dialog:
+                    root_for_dialog.withdraw() # Ocultar splash para los diálogos
+
+                messagebox.showinfo("Configuración Inicial", "Es la primera vez que ejecutas la aplicación. Por favor, completa los siguientes datos para crear tu archivo de configuración.")
+
+                # --- Recopilar datos del usuario ---
+                empresa_nombre = simpledialog.askstring("Configuración", "Nombre de tu empresa:", parent=root_for_dialog) or "Nombre de tu Empresa"
+                empresa_direccion = simpledialog.askstring("Configuración", "Dirección de tu empresa:", parent=root_for_dialog) or "Tu Dirección, Ciudad"
+                empresa_contacto = simpledialog.askstring("Configuración", "Contacto (Teléfono | Email):", parent=root_for_dialog) or "Tu Teléfono | tu.email@empresa.com"
+                master_key = simpledialog.askstring("Configuración", "Crea una Clave Maestra (para encriptar datos):", show='*', parent=root_for_dialog) or "admin"
+
                 with open(env_path, "w") as env_file:
                     chrome = "%APPDATA%/Google/Chrome"
                     env_file.write("USERNAME=\nPASSWORD=\nCARPETA=\n")
                     env_file.write("IMAGEN_FONDO=/assets/background.jpeg\n")
-                    # Generar y guardar un salt y la clave maestra por defecto
+                    env_file.write(f"EMPRESA_NOMBRE={empresa_nombre}\n")
+                    env_file.write(f"EMPRESA_DIRECCION={empresa_direccion}\n")
+                    env_file.write(f"EMPRESA_CONTACTO={empresa_contacto}\n")
                     salt = os.urandom(SALT_SIZE)
                     env_file.write(f"SALT={b64.b64encode(salt).decode('utf-8')}\n")
-                    env_file.write(f"MASTER_KEY={b64.b64encode('admin'.encode('utf-8')).decode('utf-8')}\n")
+                    env_file.write(f"MASTER_KEY={b64.b64encode(master_key.encode('utf-8')).decode('utf-8')}\n")
                     env_file.write("ICONO_APP=/assets/logo.ico\n")
                     env_file.write(f"PERFIL_CHROME={chrome}")
                 _update("Archivo .env creado!", 100)
+
+                if root_for_dialog:
+                    root_for_dialog.deiconify() # Mostrar splash de nuevo
+                    messagebox.showinfo("Configuración Completa", "¡Listo! La configuración inicial ha sido guardada.", parent=root_for_dialog)
 
             # Creacion de Carpetas Básicas
             _update("Verificando directorios...", 0)
@@ -562,45 +579,51 @@ class CotizacionService:
             # 2. Crear el archivo PDF
             nombre_archivo = f"pdfs/Cotizacion_Nro_{nro_cotizacion}.pdf"
             c = canvas.Canvas(nombre_archivo, pagesize=letter)
-            width, height = letter
+            width, height = letter            
+
+            # --- Marco y datos de la Cotización (arriba) ---
+            c.setStrokeColor(colors.lightgrey)
+            c.roundRect(0.4 * inch, height - 1.2 * inch, width - 0.8 * inch, 0.9 * inch, 10)
+
+            # --- Título y Datos de la Cotización (Centrado) ---
+            c.setFont("Helvetica-Bold", 20)
+            c.drawCentredString(width / 2, height - 0.65 * inch, "COTIZACIÓN")
+            c.setFont("Helvetica", 12)
+            c.drawCentredString(width / 2, height - 0.9 * inch, f"N°: {nro_cotizacion}   |   Fecha: {cotizacion_data[1].split(' ')[0]}")
 
             # --- Cabecera del Documento ---
+            y_pos_empresa = height - 1.5 * inch
             c.setFont("Helvetica-Bold", 16)
-            c.drawString(0.5 * inch, height - 0.5 * inch, "Nombre de tu Empresa") # Personalizable
-            
+            c.drawString(0.5 * inch, y_pos_empresa, os.getenv("EMPRESA_NOMBRE", "Nombre de tu Empresa"))
             c.setFont("Helvetica", 12)
-            c.drawString(0.5 * inch, height - 0.7 * inch, "Tu Dirección, Ciudad")
-            c.drawString(0.5 * inch, height - 0.9 * inch, "Tu Teléfono | tu.email@empresa.com")
+            c.drawString(0.5 * inch, y_pos_empresa - 0.2 * inch, os.getenv("EMPRESA_DIRECCION", "Tu Dirección, Ciudad"))
+            c.drawString(0.5 * inch, y_pos_empresa - 0.4 * inch, os.getenv("EMPRESA_CONTACTO", "Tu Teléfono | tu.email@empresa.com"))
 
             # Logo (opcional)
             ruta_logo = os.getenv("ICONO_APP")
-            if ruta_logo and os.path.exists(ruta_logo):
+            if ruta_logo and Path(ruta_logo).exists():
                 try:
-                    c.drawImage(ruta_logo, width - 2 * inch, height - 1 * inch, width=1.5*inch, preserveAspectRatio=True, mask='auto')
+                    c.drawImage(ruta_logo, width - 2 * inch, y_pos_empresa - 0.1 * inch, width=1.5*inch, preserveAspectRatio=True, mask='auto')
                 except Exception as e:
                     error_msg = f"No se pudo cargar el logo desde '{ruta_logo}': {e}"
                     print(error_msg)
                     cimiento.log_error(error_msg, exc_info=True)
 
-            # --- Título y Datos de la Cotización ---
-            c.setFont("Helvetica-Bold", 20)
-            c.drawRightString(width - 0.5 * inch, height - 1.5 * inch, "COTIZACIÓN")
-
-            c.setFont("Helvetica", 12)
-            c.drawRightString(width - 0.5 * inch, height - 1.7 * inch, f"N°: {nro_cotizacion}")
-            c.drawRightString(width - 0.5 * inch, height - 1.9 * inch, f"Fecha: {cotizacion_data[1].split(' ')[0]}")
+            # --- Marco para datos del cliente ---
+            y_pos_cliente_box = y_pos_empresa - 2.2 * inch
+            c.roundRect(0.4 * inch, y_pos_cliente_box, width - 0.9 * inch, 1.2 * inch, 10)
 
             # --- Datos del Cliente ---
             c.setFont("Helvetica-Bold", 12)
-            c.drawString(0.5 * inch, height - 2.5 * inch, "Cliente:")
+            c.drawString(0.5 * inch, y_pos_cliente_box + 1.0 * inch, "Cliente:")
             c.setFont("Helvetica", 12)
-            c.drawString(0.5 * inch, height - 2.7 * inch, f"Nombre: {cliente_data[0]}")
-            c.drawString(0.5 * inch, height - 2.9 * inch, f"RUT: {cliente_data[1]}")
-            c.drawString(0.5 * inch, height - 3.1 * inch, f"Dirección: {cliente_data[2]}")
-            c.drawString(0.5 * inch, height - 3.3 * inch, f"Correo: {cliente_data[4]}")
+            c.drawString(1.5 * inch, y_pos_cliente_box + 0.8 * inch, f"Nombre: {cliente_data[0]}")
+            c.drawString(0.5 * inch, y_pos_cliente_box + 0.6 * inch, f"RUT: {cliente_data[1]}")
+            c.drawString(0.5 * inch, y_pos_cliente_box + 0.4 * inch, f"Dirección: {cliente_data[2]}")
+            c.drawString(0.5 * inch, y_pos_cliente_box + 0.2 * inch, f"Correo: {cliente_data[4]}")
 
             # --- Tabla de Detalles ---
-            y_pos = height - 4 * inch
+            y_pos = y_pos_cliente_box - 0.5 * inch
             c.setFont("Helvetica-Bold", 11)
             c.setFillColor(colors.darkblue)
             c.rect(0.5*inch, y_pos - 0.05*inch, width - 1*inch, 0.25*inch, fill=1, stroke=0)
@@ -629,9 +652,19 @@ class CotizacionService:
 
                 y_pos -= 0.3 * inch
 
+            # --- Cuadro de Observaciones ---
+            y_observaciones = y_pos - 1.5 * inch
+            c.setFont("Helvetica-Bold", 11)
+            c.drawString(0.5 * inch, y_observaciones + 1.3 * inch, "Observaciones:")
+            c.setStrokeColor(colors.lightgrey)
+            c.roundRect(0.5 * inch, y_observaciones, width - 1 * inch, 1.2 * inch, 10)
+
             # --- Total ---
+            # --- Marco para el Total ---
+            y_total_box = y_observaciones - 0.7 * inch
+            c.roundRect(width - 3.1 * inch, y_total_box, 2.6 * inch, 0.5 * inch, 10)
             c.setFont("Helvetica-Bold", 14)
-            c.drawRightString(width - 0.6 * inch, y_pos - 0.5 * inch, f"Total: ${float(cotizacion_data[4]):,.2f}")
+            c.drawRightString(width - 0.6 * inch, y_total_box + 0.15 * inch, f"Total: ${float(cotizacion_data[4]):,.2f}")
 
             # --- Pie de Página ---
             c.setFont("Helvetica-Oblique", 9)
@@ -735,6 +768,7 @@ class VentanaPrincipal:
         # Menú Archivo
         archivo_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Archivo", menu=archivo_menu)
+        archivo_menu.add_command(label="Datos de Empresa", command=lambda: self._mostrar_frame(VentanaDatosEmpresa))
         archivo_menu.add_command(label="Configuración", command=lambda: self._mostrar_frame(VentanaConfiguracion))
         archivo_menu.add_separator()
         archivo_menu.add_command(label="Salir", command=self.ventana.quit)
@@ -940,15 +974,15 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
         insumo_frame.grid(row=1, column=0, columnspan=4, sticky="ew", padx=10, pady=5)
         
         self.lbl_insumo = ttk.Label(insumo_frame, text="Ningún insumo seleccionado", width=40)
-        self.lbl_insumo.grid(row=0, column=0, padx=5, pady=5)
+        self.lbl_insumo.grid(row=0, column=1, padx=5, pady=5)
         btn_buscar_insumo = ttk.Button(insumo_frame, text="Buscar Insumo", command=self.buscar_insumo)
-        btn_buscar_insumo.grid(row=0, column=1, padx=5)
+        btn_buscar_insumo.grid(row=0, column=2, padx=10)
 
-        ttk.Label(insumo_frame, text="Cantidad:").grid(row=0, column=2, padx=5)
+        # ttk.Label(insumo_frame, text="Cantidad:").grid(row=1, column=0, padx=5)
         self.entry_cantidad = ttk.Entry(insumo_frame, width=8)
-        self.entry_cantidad.grid(row=0, column=3, padx=5)
-        btn_add_insumo = ttk.Button(insumo_frame, text="Añadir a la Cotización", command=self.anadir_insumo)
-        btn_add_insumo.grid(row=0, column=4, padx=10)
+        self.entry_cantidad.grid(row=0, column=0, padx=5)
+        btn_add_insumo = ttk.Button(insumo_frame, text="Añadir", command=self.anadir_insumo)
+        btn_add_insumo.grid(row=0, column=3, padx=10)
 
         # --- Treeview para detalles de la cotización ---
         detalle_frame = ttk.LabelFrame(self, text="Detalle de la Cotización")
@@ -1402,6 +1436,43 @@ class VentanaSeleccionarInsumo(Ventana):
             self.callback(datos_insumo)
             self.destroy()
 
+class VentanaDatosEmpresa(ttk.Frame, VistaBase):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        self.controller = controller
+        load_dotenv(override=True)
+
+        datos_frame = ttk.LabelFrame(self, text="Datos de la Empresa")
+        datos_frame.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
+        self.grid_columnconfigure(0, weight=1)
+        datos_frame.grid_columnconfigure(1, weight=1)
+
+        self.crear_etiqueta(datos_frame, "Nombre de la Empresa:", 0, 0)
+        self.nombre_empresa = self.crear_entrada_texto(datos_frame, 40, 1)
+        self.nombre_empresa.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+
+        self.crear_etiqueta(datos_frame, "Dirección:", 1, 0)
+        self.direccion_empresa = self.crear_entrada_texto(datos_frame, 40, 2)
+        self.direccion_empresa.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+
+        self.crear_etiqueta(datos_frame, "Teléfono y Correo:", 2, 0)
+        self.contacto_empresa = self.crear_entrada_texto(datos_frame, 40, 1)
+        self.contacto_empresa.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
+
+        self.nombre_empresa.insert(tk.END, os.getenv("EMPRESA_NOMBRE", ""))
+        self.direccion_empresa.insert(tk.END, os.getenv("EMPRESA_DIRECCION", ""))
+        self.contacto_empresa.insert(tk.END, os.getenv("EMPRESA_CONTACTO", ""))
+
+        ttk.Button(self, text="Guardar", command=self.guardar).grid(row=1, column=0, padx=20, pady=10, sticky="e")
+
+    def guardar(self):
+        set_key(".env", "EMPRESA_NOMBRE", self.nombre_empresa.get("1.0", tk.END).strip())
+        set_key(".env", "EMPRESA_DIRECCION", self.direccion_empresa.get("1.0", tk.END).strip())
+        set_key(".env", "EMPRESA_CONTACTO", self.contacto_empresa.get("1.0", tk.END).strip())
+        messagebox.showinfo("Guardado", "Los datos de la empresa se han actualizado correctamente.")
+        self.destroy()
+
+
 class VentanaConfiguracion(ttk.Frame, VistaBase):
     def __init__(self, parent, controller):
         super().__init__(parent)
@@ -1549,7 +1620,7 @@ if __name__ == "__main__":
     splash_root.update()
 
     # --- Instalación y Configuración ---
-    cimiento.creacion_entorno(update_status=update_status)
+    cimiento.creacion_entorno(update_status=update_status, root_for_dialog=splash_root)
 
     # --- Iniciar la Aplicación Principal ---
     splash_root.destroy()
