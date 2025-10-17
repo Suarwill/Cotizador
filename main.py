@@ -293,7 +293,6 @@ class cimiento:
             return False
 
 class CSVRepository:
-    """Clase genérica para manejar operaciones CRUD en un archivo CSV."""
     def __init__(self, filename: str, headers: list[str], encrypted: bool = False):
         self.filepath = Path("data") / filename
         self.headers = headers
@@ -658,7 +657,6 @@ class VistaBase:
         text_widget = Text(parent, width=width, height=height, **kwargs)
 
         def _focus_next_widget(event):
-            """Mueve el foco al siguiente widget y previene el salto de línea."""
             event.widget.tk_focusNext().focus()
             return "break"
 
@@ -875,7 +873,6 @@ class VentanaClientes(ttk.Frame, VistaBase):
         self.datacorreo.delete("1.0", tk.END)
 
     def _cargar_cliente_seleccionado(self, datos_cliente):
-        """Limpia los campos y carga los datos del cliente seleccionado."""
         self.limpiar_campos()
         # Cargar nuevos datos
         self.datacliente.insert("1.0", datos_cliente[0])
@@ -1279,7 +1276,6 @@ class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
                 self.tree_detalle_cot.delete(i)
 
     def recargar_cotizaciones(self):
-        """Limpia y vuelve a cargar el treeview de cotizaciones."""
         for i in self.tree_cotizaciones.get_children():
             self.tree_cotizaciones.delete(i)
         self.cargar_todas_cotizaciones()
@@ -1457,7 +1453,6 @@ class VentanaConfiguracion(ttk.Frame, VistaBase):
         self.expandir_columnas(4)
 
     def buscar_archivo(self, entry_widget, filetypes):
-        """Abre un diálogo para seleccionar un archivo y lo inserta en el widget de entrada."""
         filepath = filedialog.askopenfilename(filetypes=filetypes)
         if filepath:
             entry_widget.delete("1.0", tk.END)
