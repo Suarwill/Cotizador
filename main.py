@@ -587,6 +587,9 @@ class CotizacionService:
     @staticmethod
     def generar_pdf(nro_cotizacion):
         try:
+            # Parametros:
+            size_title = 12
+            size_subtitle = 10
             # 1. Cargar todos los datos necesarios
             cotizaciones = CotizacionService.cargar_todas()
             cotizacion_data = next((c for c in cotizaciones if c and c[0] == str(nro_cotizacion)), None)
@@ -611,16 +614,16 @@ class CotizacionService:
             c.roundRect(0.4 * inch, height - 1.2 * inch, width - 0.8 * inch, 0.9 * inch, 10)
 
             # --- Título y Datos de la Cotización (Centrado) ---
-            c.setFont("Helvetica-Bold", 20)
+            c.setFont("Helvetica-Bold", 16)
             c.drawCentredString(width / 2, height - 0.65 * inch, "COTIZACIÓN")
-            c.setFont("Helvetica", 12)
+            c.setFont("Helvetica", size_title)
             c.drawCentredString(width / 2, height - 0.9 * inch, f"N°: {nro_cotizacion}   |   Fecha: {cotizacion_data[1].split(' ')[0]}")
 
             # --- Cabecera del Documento ---
             y_pos_empresa = height - 1.5 * inch
-            c.setFont("Helvetica-Bold", 16)
+            c.setFont("Helvetica-Bold", size_title)
             c.drawString(0.5 * inch, y_pos_empresa, os.getenv("EMPRESA_NOMBRE", "Nombre de tu Empresa"))
-            c.setFont("Helvetica", 12)
+            c.setFont("Helvetica", size_subtitle)
             c.drawString(0.5 * inch, y_pos_empresa - 0.2 * inch, os.getenv("EMPRESA_DIRECCION", "Tu Dirección, Ciudad"))
             c.drawString(0.5 * inch, y_pos_empresa - 0.4 * inch, os.getenv("EMPRESA_CONTACTO", "Tu Teléfono | tu.email@empresa.com"))
 
@@ -639,10 +642,10 @@ class CotizacionService:
             c.roundRect(0.4 * inch, y_pos_cliente_box, width - 0.9 * inch, 1.2 * inch, 10)
 
             # --- Datos del Cliente ---
-            c.setFont("Helvetica-Bold", 12)
-            c.drawString(0.5 * inch, y_pos_cliente_box + 1.0 * inch, "Cliente:")
-            c.setFont("Helvetica", 12)
-            c.drawString(1.5 * inch, y_pos_cliente_box + 0.8 * inch, f"Nombre: {cliente_data[0]}")
+            c.setFont("Helvetica-Bold", size_title)
+            c.drawString(0.5 * inch, y_pos_cliente_box + 1.0 * inch, "Datos del Cliente")
+            c.setFont("Helvetica", size_subtitle)
+            c.drawString(0.5 * inch, y_pos_cliente_box + 0.8 * inch, f"Razon Social: {cliente_data[0]}")
             c.drawString(0.5 * inch, y_pos_cliente_box + 0.6 * inch, f"RUT: {cliente_data[1]}")
             c.drawString(0.5 * inch, y_pos_cliente_box + 0.4 * inch, f"Dirección: {cliente_data[2]}")
             c.drawString(0.5 * inch, y_pos_cliente_box + 0.2 * inch, f"Correo: {cliente_data[4]}")
@@ -660,7 +663,7 @@ class CotizacionService:
             
             y_pos -= 0.3 * inch
             c.setFillColor(colors.black)
-            c.setFont("Helvetica", 10)
+            c.setFont("Helvetica", size_subtitle)
 
             for i, detalle in enumerate(detalles):
                 # (Cantidad, Descripcion, PrecioUnitario, Descuento, Subtotal)
@@ -682,7 +685,7 @@ class CotizacionService:
 
             # --- Cuadro de Observaciones ---
             y_observaciones = y_pos - 1.5 * inch
-            c.setFont("Helvetica-Bold", 11)
+            c.setFont("Helvetica-Bold", size_title)
             c.drawString(0.5 * inch, y_observaciones + 1.3 * inch, "Observaciones:")
             c.setStrokeColor(colors.lightgrey)
             c.roundRect(0.5 * inch, y_observaciones, width - 1 * inch, 1.2 * inch, 10)
@@ -691,7 +694,7 @@ class CotizacionService:
             y_total_box = y_observaciones - 1.5 * inch
             c.roundRect(width - 3.6 * inch, y_total_box, 3.1 * inch, 1.3 * inch, 10)
             
-            c.setFont("Helvetica", 11)
+            c.setFont("Helvetica", size_subtitle)
             y_line = y_total_box + 1.05 * inch
             c.drawRightString(width - 1 * inch, y_line, f"Subtotal: ${float(cotizacion_data[4]):,.2f}")
             y_line -= 0.2 * inch
@@ -706,8 +709,8 @@ class CotizacionService:
             y_line -= 0.2 * inch
             c.drawRightString(width - 1 * inch, y_line, f"IVA ({float(os.getenv('IVA_RATE', 0.19))*100}%): ${float(cotizacion_data[7]):,.2f}")
 
-            c.setFont("Helvetica-Bold", 14)
-            c.drawRightString(width - 0.7 * inch, y_total_box + 0.1 * inch, f"Total: ${float(cotizacion_data[8]):,.2f}")
+            c.setFont("Helvetica-Bold", size_title)
+            c.drawRightString(width - 1 * inch, y_total_box + 0.1 * inch, f"Total: ${float(cotizacion_data[8]):,.2f}")
 
             # --- Pie de Página ---
             c.setFont("Helvetica-Oblique", 9)

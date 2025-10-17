@@ -1,3 +1,2 @@
-Nro_Cotizacion,Cantidad,Descripcion1,Descripcion2,Descripcion3,Unidad,PrecioUnitario,Subtotal
-1,1500,Frijol,negro,chivato,unidad,500.0,750000.0
-2,185,Frijol,negro,chivato,unidad,500.0,92500.0
+Nro_Cotizacion,Cantidad,Codigo,Descripcion1,Descripcion2,Descripcion3,Unidad,PrecioUnitario,Descuento,Subtotal
+1,13,5465423132,Tornillo,Flojo,Verde,unidad,3500.0,0.0,45500.0

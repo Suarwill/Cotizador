@@ -1,3 +1,2 @@
-Nro,Fecha,Estado,Cliente,PrecioTotal
-1,2025-10-17 09:28,Pendiente,Kaka client,750000.00
-2,2025-10-17 09:34,Pendiente,Kaka client,92500.00
+Nro,Fecha,Estado,Cliente,Subtotal,Descuento,Recargo,IVA,Total
+1,2025-10-17 12:04,Pendiente,Cliente 3,45500.00,8645.00,0.00,7002.45,43857.45
