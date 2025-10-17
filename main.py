@@ -250,6 +250,7 @@ class cimiento:
                     env_file.write(f"SALT={b64.b64encode(salt).decode('utf-8')}\n")
                     env_file.write(f"MASTER_KEY={b64.b64encode(master_key.encode('utf-8')).decode('utf-8')}\n")
                     env_file.write("ICONO_APP=/assets/logo.ico\n")
+                    env_file.write("IVA_RATE=0.19\n")
                     env_file.write(f"PERFIL_CHROME={chrome}")
                 _update("Archivo .env creado!", 100)
 
@@ -270,8 +271,8 @@ class cimiento:
             archivos_csv = {
                 "data_clientes.csv": ["Nombre", "RUT", "Direccion", "Telefono", "Correo"],
                 "data_productos.csv": ["Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "Costo", "Precio"],
-                "data_cotizaciones.csv": ["Nro", "Fecha", "Estado", "Cliente", "PrecioTotal"],
-                "data_cotizaciones_detalle.csv": ["Nro_Cotizacion", "Cantidad", "Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "PrecioUnitario", "Subtotal"]
+                "data_cotizaciones.csv": ["Nro", "Fecha", "Estado", "Cliente", "Subtotal", "Descuento", "Recargo", "IVA", "Total"],
+                "data_cotizaciones_detalle.csv": ["Nro_Cotizacion", "Cantidad", "Codigo", "Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "PrecioUnitario", "Descuento", "Subtotal"]
             }
 
             for nombre_archivo, headers in archivos_csv.items():
@@ -384,8 +385,8 @@ class CSVRepository:
 # --- Repositorios de Datos ---
 clientes_repo = CSVRepository("data_clientes.csv", ["Nombre", "RUT", "Direccion", "Telefono", "Correo"], encrypted=True)
 insumos_repo = CSVRepository("data_productos.csv", ["Codigo", "Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "Costo", "Precio"])
-cotizaciones_repo = CSVRepository("data_cotizaciones.csv", ["Nro", "Fecha", "Estado", "Cliente", "PrecioTotal"])
-detalles_repo = CSVRepository("data_cotizaciones_detalle.csv", ["Nro_Cotizacion", "Cantidad", "Codigo", "Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "PrecioUnitario", "Subtotal"])
+cotizaciones_repo = CSVRepository("data_cotizaciones.csv", ["Nro", "Fecha", "Estado", "Cliente", "Subtotal", "Descuento", "Recargo", "IVA", "Total"])
+detalles_repo = CSVRepository("data_cotizaciones_detalle.csv", ["Nro_Cotizacion", "Cantidad", "Codigo", "Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "PrecioUnitario", "Descuento", "Subtotal"])
 
 class ClienteService:
     @staticmethod
@@ -474,12 +475,13 @@ class CotizacionService:
                 # Nro, Cant, Codigo, Desc1, Desc2, Desc3, Unidad, P.Unit, Subtotal
                 #  0 ,  1  ,   2   ,   3  ,   4  ,   5  ,    6   ,   7    ,    8
                 desc_concatenada = f"[{row[2]}] {row[3]} {row[4]} {row[5]}".strip()
-                vista_detalle = (row[1], desc_concatenada, row[7], row[8])
+                # Cantidad, Desc, P.Unit, Descuento, Subtotal
+                vista_detalle = (row[1], desc_concatenada, row[7], row[8], row[9])
                 detalles_filtrados.append(vista_detalle)
         return detalles_filtrados
 
     @staticmethod
-    def guardar_completa(cliente, total, detalles):
+    def guardar_completa(cliente, desglose, detalles):
         # 1. Guardar cabecera de cotización
         nro_cotizacion = cotizaciones_repo.get_next_id()
         
@@ -487,9 +489,14 @@ class CotizacionService:
             nro_cotizacion,
             datetime.now().strftime("%Y-%m-%d %H:%M"),
             "Pendiente",
-            cliente[0],  # Nombre del cliente
-            f"{total:.2f}"
+            cliente[0], # Nombre del cliente
+            f"{desglose['subtotal_bruto']:.2f}",
+            f"{desglose['descuento_global']:.2f}",
+            f"{desglose['recargo_global']:.2f}",
+            f"{desglose['iva']:.2f}",
+            f"{desglose['total']:.2f}"
         ]
+
         if not cotizaciones_repo.append_row(datos_cotizacion):
             return 0 # Falla al guardar
 
@@ -499,29 +506,36 @@ class CotizacionService:
             for item_id, valores_vista in detalles.items():
                 datos_insumo_completos = valores_vista['insumo_completo']
                 detalle_fila = [
-                    nro_cotizacion,
-                    valores_vista['vista'][0],       # Cantidad
-                    datos_insumo_completos[0],       # Codigo
-                    datos_insumo_completos[1],       # Desc1
-                    datos_insumo_completos[2],       # Desc2
-                    datos_insumo_completos[3],       # Desc3
-                    datos_insumo_completos[4],       # Unidad
-                    float(valores_vista['vista'][2]),# Precio Unitario
-                    float(valores_vista['vista'][3])   # Subtotal
+                    nro_cotizacion,                     # Nro Cotizacion
+                    valores_vista['vista'][0],          # Cantidad
+                    datos_insumo_completos[0],          # Codigo
+                    datos_insumo_completos[1],          # Desc1
+                    datos_insumo_completos[2],          # Desc2
+                    datos_insumo_completos[3],          # Desc3
+                    datos_insumo_completos[4],          # Unidad
+                    float(valores_vista['vista'][2]),   # Precio Unitario
+                    float(valores_vista['vista'][3]),   # Descuento
+                    float(valores_vista['vista'][4])    # Subtotal
                 ]
                 writer.writerow(detalle_fila)
         return nro_cotizacion
 
     @staticmethod
-    def actualizar_completa(nro_cotizacion, cliente, total, detalles):
+    def actualizar_completa(nro_cotizacion, cliente, desglose, detalles):
         # 1. Actualizar cabecera
         cotizaciones = cotizaciones_repo.read_all(skip_header=False)[1:] # Datos sin cabecera
         
         actualizado = False
         for cotizacion in cotizaciones:
             if cotizacion and cotizacion[0] == str(nro_cotizacion):
-                cotizacion[3] = cliente[0] # Nombre Cliente
-                cotizacion[4] = f"{total:.2f}" # Total
+                # ["Nro", "Fecha", "Estado", "Cliente", "Subtotal", "Descuento", "Recargo", "IVA", "Total"]
+                #   0      1        2          3          4            5            6         7      8
+                cotizacion[3] = cliente[0]
+                cotizacion[4] = f"{desglose['subtotal_bruto']:.2f}"
+                cotizacion[5] = f"{desglose['descuento_global']:.2f}"
+                cotizacion[6] = f"{desglose['recargo_global']:.2f}"
+                cotizacion[7] = f"{desglose['iva']:.2f}"
+                cotizacion[8] = f"{desglose['total']:.2f}"
                 actualizado = True
                 break
         
@@ -536,10 +550,16 @@ class CotizacionService:
         # Añade los nuevos detalles de la cotización actual
         for item_id, valores_vista in detalles.items():
             datos_insumo_completos = valores_vista['insumo_completo']
-            detalle_fila = [nro_cotizacion, valores_vista['vista'][0], datos_insumo_completos[0], # Cant, Codigo
-                            datos_insumo_completos[1], datos_insumo_completos[2], datos_insumo_completos[3], # Desc 1,2,3
-                            datos_insumo_completos[4], float(valores_vista['vista'][2]), float(valores_vista['vista'][3])] # Unidad, P.Unit, Subtotal
-
+            detalle_fila = [
+                nro_cotizacion,
+                valores_vista['vista'][0],          # Cantidad
+                datos_insumo_completos[0],          # Codigo
+                datos_insumo_completos[1], datos_insumo_completos[2], datos_insumo_completos[3], # Desc
+                datos_insumo_completos[4],          # Unidad
+                float(valores_vista['vista'][2]),   # P.Unit
+                float(valores_vista['vista'][3]),   # Descuento
+                float(valores_vista['vista'][4])    # Subtotal
+            ]
             detalles_filtrados.append(detalle_fila)
 
         return detalles_repo.write_all(detalles_filtrados)
@@ -643,13 +663,16 @@ class CotizacionService:
             c.setFont("Helvetica", 10)
 
             for i, detalle in enumerate(detalles):
-                # (Cantidad, Descripcion, PrecioUnitario, Subtotal)
-                cantidad, desc, p_unit, subtotal = detalle
+                # (Cantidad, Descripcion, PrecioUnitario, Descuento, Subtotal)
+                cantidad, desc, p_unit, descuento, subtotal = detalle
                 
                 c.drawString(0.6 * inch, y_pos, str(cantidad))
                 c.drawString(1.5 * inch, y_pos, str(desc))
                 c.drawRightString(width - 2.5 * inch, y_pos, f"${float(p_unit):,.2f}")
                 c.drawRightString(width - 0.6 * inch, y_pos, f"${float(subtotal):,.2f}")
+                
+                if float(descuento) > 0:
+                    c.drawString(1.5 * inch, y_pos - 0.15 * inch, f"  (Dto: {descuento}%)")
                 
                 # Línea divisoria
                 if i < len(detalles) - 1:
@@ -665,11 +688,26 @@ class CotizacionService:
             c.roundRect(0.5 * inch, y_observaciones, width - 1 * inch, 1.2 * inch, 10)
 
             # --- Total ---
-            # --- Marco para el Total ---
-            y_total_box = y_observaciones - 0.7 * inch
-            c.roundRect(width - 3.1 * inch, y_total_box, 2.6 * inch, 0.5 * inch, 10)
+            y_total_box = y_observaciones - 1.5 * inch
+            c.roundRect(width - 3.6 * inch, y_total_box, 3.1 * inch, 1.3 * inch, 10)
+            
+            c.setFont("Helvetica", 11)
+            y_line = y_total_box + 1.05 * inch
+            c.drawRightString(width - 1 * inch, y_line, f"Subtotal: ${float(cotizacion_data[4]):,.2f}")
+            y_line -= 0.2 * inch
+            if float(cotizacion_data[5]) > 0:
+                c.drawRightString(width - 1 * inch, y_line, f"Descuento: -${float(cotizacion_data[5]):,.2f}")
+                y_line -= 0.2 * inch
+            if float(cotizacion_data[6]) > 0:
+                c.drawRightString(width - 1 * inch, y_line, f"Recargo: +${float(cotizacion_data[6]):,.2f}")
+                y_line -= 0.2 * inch
+            
+            c.line(width - 3.5 * inch, y_line, width - 0.6 * inch, y_line)
+            y_line -= 0.2 * inch
+            c.drawRightString(width - 1 * inch, y_line, f"IVA ({float(os.getenv('IVA_RATE', 0.19))*100}%): ${float(cotizacion_data[7]):,.2f}")
+
             c.setFont("Helvetica-Bold", 14)
-            c.drawRightString(width - 0.6 * inch, y_total_box + 0.15 * inch, f"Total: ${float(cotizacion_data[4]):,.2f}")
+            c.drawRightString(width - 0.7 * inch, y_total_box + 0.1 * inch, f"Total: ${float(cotizacion_data[8]):,.2f}")
 
             # --- Pie de Página ---
             c.setFont("Helvetica-Oblique", 9)
@@ -962,7 +1000,7 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
         self.cliente_seleccionado = None
         self.insumo_seleccionado = None
         self.controller = controller
-        self.total_cotizacion = 0.0
+        self.desglose_cotizacion = {}
         self.nro_cotizacion_editando = nro_cotizacion_a_editar
         self.detalle_data = {} # Diccionario para almacenar datos completos
 
@@ -995,12 +1033,12 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
         self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        columnas_detalle = ("Cantidad", "Descripción", "Precio Unitario", "Subtotal")
+        columnas_detalle = ("Cantidad", "Descripción", "Precio Unitario", "Descuento %", "Subtotal")
         self.tree_detalle = ttk.Treeview(detalle_frame, columns=columnas_detalle, show='headings')
         for col in columnas_detalle:
             self.tree_detalle.heading(col, text=col)
         self.tree_detalle.column("Cantidad", width=80, anchor='center')
-        self.tree_detalle.column("Descripción", width=300)
+        self.tree_detalle.column("Descripción", width=250)
         self.tree_detalle.column("Precio Unitario", width=120, anchor='e')
         self.tree_detalle.column("Subtotal", width=120, anchor='e')
         self.tree_detalle.pack(side="left", fill="both", expand=True)
@@ -1009,10 +1047,37 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
         # --- Total y Botones de Acción ---
         total_frame = ttk.Frame(self)
         total_frame.grid(row=3, column=0, columnspan=4, sticky="ew", padx=10, pady=10)
-        self.lbl_total = ttk.Label(total_frame, text="Total: $0.00", font=("Arial", 14, "bold"))
-        self.lbl_total.pack(side="left")
+        
+        # --- Desglose Financiero ---
+        desglose_frame = ttk.LabelFrame(total_frame, text="Resumen Financiero")
+        desglose_frame.pack(side="left", fill="x", expand=True, padx=5)
 
-        btn_guardar = ttk.Button(total_frame, text="Guardar Cotización", command=self.guardar_cotizacion)
+        self.crear_etiqueta(desglose_frame, "Subtotal:", 0, 0, **{'font': ('Arial', 10)})
+        self.lbl_subtotal_bruto = ttk.Label(desglose_frame, text="$0.00", font=('Arial', 10))
+        self.lbl_subtotal_bruto.grid(row=0, column=1, sticky='e')
+
+        self.crear_etiqueta(desglose_frame, "Descuento Global ($):", 1, 0, **{'font': ('Arial', 10)})
+        self.entry_descuento = ttk.Entry(desglose_frame, width=10, justify='right')
+        self.entry_descuento.grid(row=1, column=1, sticky='e')
+        self.entry_descuento.bind("<KeyRelease>", lambda e: self.actualizar_total())
+
+        self.crear_etiqueta(desglose_frame, "Recargo Global ($):", 2, 0, **{'font': ('Arial', 10)})
+        self.entry_recargo = ttk.Entry(desglose_frame, width=10, justify='right')
+        self.entry_recargo.grid(row=2, column=1, sticky='e')
+        self.entry_recargo.bind("<KeyRelease>", lambda e: self.actualizar_total())
+
+        self.crear_etiqueta(desglose_frame, "IVA (19%):", 3, 0, **{'font': ('Arial', 10)})
+        self.lbl_iva = ttk.Label(desglose_frame, text="$0.00", font=('Arial', 10))
+        self.lbl_iva.grid(row=3, column=1, sticky='e')
+
+        self.crear_etiqueta(desglose_frame, "Total:", 4, 0, **{'font': ('Arial', 12, 'bold')})
+        self.lbl_total = ttk.Label(desglose_frame, text="$0.00", font=("Arial", 12, "bold"))
+        self.lbl_total.grid(row=4, column=1, sticky='e')
+
+        # --- Botones ---
+        botones_frame = ttk.Frame(total_frame)
+        botones_frame.pack(side="right", fill="y")
+        btn_guardar = ttk.Button(botones_frame, text="Guardar Cotización", command=self.guardar_cotizacion)
         btn_guardar.pack(side="right", padx=5)
         btn_limpiar = ttk.Button(total_frame, text="Limpiar", command=self.limpiar_formulario)
         btn_limpiar.pack(side="right")
@@ -1028,7 +1093,7 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
         column_id = self.tree_detalle.identify_column(event.x)
         column_index = int(column_id.replace('#', '')) - 1
         
-        editable_columns = [0, 1, 2] # Indices de Cantidad, Descripción, Precio Unitario
+        editable_columns = [0, 2, 3] # Indices de Cantidad, Precio Unitario, Descuento
         if column_index not in editable_columns:
             return
 
@@ -1055,13 +1120,20 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
             
             try:
                 if column_index == 0: # Cantidad
-                    values[0] = int(new_value)
-                    values[3] = f"{values[0] * float(values[2]):.2f}"
-                elif column_index == 1: # Descripción
-                    values[1] = new_value
+                    cantidad = int(new_value)
+                    precio = float(values[2])
+                    descuento_pct = float(values[3])
+                    subtotal = (cantidad * precio) * (1 - descuento_pct / 100)
+                    values[0] = cantidad
+                    values[4] = f"{subtotal:.2f}"
                 elif column_index == 2: # Precio Unitario
-                    values[2] = f"{float(new_value):.2f}"
-                    values[3] = f"{int(values[0]) * float(values[2]):.2f}"
+                    # No se permite editar precio unitario directamente aquí para mantener consistencia con la DB de insumos
+                    pass
+                elif column_index == 3: # Descuento %
+                    values[3] = float(new_value)
+                    subtotal = (int(values[0]) * float(values[2])) * (1 - float(new_value) / 100)
+                    values[4] = f"{subtotal:.2f}"
+
                 self.tree_detalle.item(item_id, values=tuple(values))
                 self.actualizar_total()
             except ValueError:
@@ -1099,11 +1171,12 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
         
         cantidad = int(cantidad_str)
         precio_unitario = float(self.insumo_seleccionado[6]) # Columna Precio
-        subtotal = cantidad * precio_unitario
+        descuento_pct = 0.0
+        subtotal = (cantidad * precio_unitario) * (1 - descuento_pct / 100)
 
         # Añadir al Treeview
         descripcion_completa = f"[{self.insumo_seleccionado[0]}] {self.insumo_seleccionado[1]} {self.insumo_seleccionado[2]} {self.insumo_seleccionado[3]}".strip()
-        item_data = (cantidad, descripcion_completa, f"{precio_unitario:.2f}", f"{subtotal:.2f}")
+        item_data = (cantidad, descripcion_completa, f"{precio_unitario:.2f}", f"{descuento_pct:.2f}", f"{subtotal:.2f}")
         item_id = self.tree_detalle.insert("", "end", values=item_data, tags=('item',))
         
         self.detalle_data[item_id] = {
@@ -1117,11 +1190,34 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
         self.entry_cantidad.delete(0, "end")
 
     def actualizar_total(self):
-        self.total_cotizacion = 0.0
+        subtotal_bruto = 0.0
         for item_id in self.tree_detalle.get_children():
-            subtotal_str = self.tree_detalle.item(item_id)['values'][3]
-            self.total_cotizacion += float(subtotal_str)
-        self.lbl_total.config(text=f"Total: ${self.total_cotizacion:.2f}")
+            subtotal_str = self.tree_detalle.item(item_id)['values'][4] # Columna Subtotal
+            subtotal_bruto += float(subtotal_str)
+
+        try:
+            descuento_global = float(self.entry_descuento.get() or 0)
+        except ValueError:
+            descuento_global = 0
+        
+        try:
+            recargo_global = float(self.entry_recargo.get() or 0)
+        except ValueError:
+            recargo_global = 0
+
+        neto = subtotal_bruto - descuento_global + recargo_global
+        iva_rate = float(os.getenv("IVA_RATE", 0.19))
+        iva = neto * iva_rate
+        total = neto + iva
+
+        self.desglose_cotizacion = {
+            'subtotal_bruto': subtotal_bruto, 'descuento_global': descuento_global,
+            'recargo_global': recargo_global, 'iva': iva, 'total': total
+        }
+
+        self.lbl_subtotal_bruto.config(text=f"${subtotal_bruto:,.2f}")
+        self.lbl_iva.config(text=f"${iva:,.2f}")
+        self.lbl_total.config(text=f"${total:,.2f}")
 
     def guardar_cotizacion(self):
         if not self.cliente_seleccionado:
@@ -1134,7 +1230,7 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
         if self.nro_cotizacion_editando:
             # Lógica para actualizar
             exito = CotizacionService.actualizar_completa(
-                self.nro_cotizacion_editando, self.cliente_seleccionado, self.total_cotizacion, self.detalle_data
+                self.nro_cotizacion_editando, self.cliente_seleccionado, self.desglose_cotizacion, self.detalle_data
             )
             if exito:
                 messagebox.showinfo("Éxito", f"Cotización N° {self.nro_cotizacion_editando} actualizada correctamente.")
@@ -1144,7 +1240,7 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
         else:
             # Lógica para guardar una nueva
             nro_cotizacion = CotizacionService.guardar_completa(
-                self.cliente_seleccionado, self.total_cotizacion, self.detalle_data
+                self.cliente_seleccionado, self.desglose_cotizacion, self.detalle_data
             )
             if nro_cotizacion > 0:
                 messagebox.showinfo("Éxito", f"Cotización N° {nro_cotizacion} guardada correctamente.")
@@ -1158,6 +1254,8 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
         self.tree_detalle.delete(*self.tree_detalle.get_children())
         self.nro_cotizacion_editando = None
         self.detalle_data.clear()
+        self.entry_descuento.delete(0, tk.END)
+        self.entry_recargo.delete(0, tk.END)
         self.actualizar_total()
 
     def cargar_cotizacion_para_edicion(self):
@@ -1167,6 +1265,10 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
         if not cotizacion_data:
             messagebox.showerror("Error", f"No se encontró la cotización N° {self.nro_cotizacion_editando}")
             return
+
+        self.entry_descuento.insert(0, cotizacion_data[5]) # Descuento global
+        self.entry_recargo.insert(0, cotizacion_data[6])   # Recargo global
+
 
         # 2. Cargar cliente
         nombre_cliente = cotizacion_data[3] # Columna Cliente
@@ -1179,11 +1281,11 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
 
         for detalle_fila in detalles_repo.read_all():
             if detalle_fila and detalle_fila[0] == str(self.nro_cotizacion_editando):
-                # Concatenar descripción para la vista
+                # Nro_Cot, Cant, Codigo, Desc1, Desc2, Desc3, Unidad, P.Unit, Dto, Subtotal
                 desc_concatenada = f"[{detalle_fila[2]}] {detalle_fila[3]} {detalle_fila[4]} {detalle_fila[5]}".strip()
 
-                # Reconstruir la tupla de la vista del detalle
-                vista_detalle = (detalle_fila[1], desc_concatenada, detalle_fila[7], detalle_fila[8])
+                # (Cantidad, Desc, P.Unit, Dto, Subtotal)
+                vista_detalle = (detalle_fila[1], desc_concatenada, detalle_fila[7], detalle_fila[8], detalle_fila[9])
                 item_id = self.tree_detalle.insert("", "end", values=vista_detalle)
 
                 # Encontrar el insumo completo correspondiente para guardarlo en detalle_data
@@ -1205,7 +1307,7 @@ class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
         listado_frame = ttk.LabelFrame(self, text="Listado de Cotizaciones")
         listado_frame.pack(fill="both", expand=True, padx=10, pady=5)
         
-        columnas_cot = ("Nro", "Fecha", "Estado", "Cliente", "Total")
+        columnas_cot = ("Nro", "Fecha", "Estado", "Cliente", "Subtotal", "Descuento", "Recargo", "IVA", "Total")
         self.tree_cotizaciones = ttk.Treeview(listado_frame, columns=columnas_cot, show='headings')
         for col in columnas_cot:
             self.tree_cotizaciones.heading(col, text=col)
@@ -1234,7 +1336,7 @@ class VentanaBuscarCotizacion(ttk.Frame, VistaBase):
         detalle_frame = ttk.LabelFrame(self, text="Detalle de la Cotización Seleccionada")
         detalle_frame.pack(fill="both", expand=True, padx=10, pady=5)
 
-        columnas_det = ("Cantidad", "Descripción", "Precio Unit.", "Subtotal")
+        columnas_det = ("Cantidad", "Descripción", "Precio Unit.", "Dto %", "Subtotal")
         self.tree_detalle_cot = ttk.Treeview(detalle_frame, columns=columnas_det, show='headings')
         for col in columnas_det:
             self.tree_detalle_cot.heading(col, text=col)
@@ -1497,6 +1599,7 @@ class VentanaConfiguracion(ttk.Frame, VistaBase):
         self.crear_etiqueta(self, "Imagen de Fondo:", 3, 1)
         self.crear_etiqueta(self, "Icono Aplicación:", 4, 1)
         self.crear_etiqueta(self, "Clave Maestra:", 5, 1)
+        self.crear_etiqueta(self, "Tasa de IVA (%):", 6, 1)
 
         self.userdata =     self.crear_entrada_texto(self, 30, 1)
         self.userdata.grid(row=0, column=2)
@@ -1510,6 +1613,8 @@ class VentanaConfiguracion(ttk.Frame, VistaBase):
         self.icono_app_path.grid(row=4, column=2)
         self.master_key_path = self.crear_entrada_texto(self, 30, 1)
         self.master_key_path.grid(row=5, column=2)
+        self.iva_rate_entry = self.crear_entrada_texto(self, 10, 1)
+        self.iva_rate_entry.grid(row=6, column=2, sticky="w")
 
         # Botones para buscar archivos
         ttk.Button(self, text="...", width=3, command=lambda: self.buscar_archivo(self.imagen_fondo_path, [("Archivos de Imagen", "*.png *.jpg *.jpeg *.gif")])).grid(row=3, column=3, padx=5)
@@ -1527,9 +1632,12 @@ class VentanaConfiguracion(ttk.Frame, VistaBase):
         master_key_b64 = os.getenv("MASTER_KEY")
         master_key_plain = b64.b64decode(master_key_b64).decode('utf-8') if master_key_b64 else "admin"
         self.master_key_path.insert(tk.END, master_key_plain)
+        
+        iva_rate_pct = float(os.getenv("IVA_RATE", 0.19)) * 100
+        self.iva_rate_entry.insert(tk.END, f"{iva_rate_pct:.2f}")
 
-        self.crear_boton("Guardar", self.guardar, 6, 2)
-        self.crear_boton("Cerrar Vista", self.destroy, 6, 1)
+        self.crear_boton("Guardar", self.guardar, 7, 2)
+        self.crear_boton("Cerrar Vista", self.destroy, 7, 1)
         
         self.crear_etiqueta(self, " ", 0, 3)
         self.expandir_columnas(4)
@@ -1547,6 +1655,12 @@ class VentanaConfiguracion(ttk.Frame, VistaBase):
         imagen_fondo = self.imagen_fondo_path.get("1.0", tk.END).strip()
         icono_app = self.icono_app_path.get("1.0", tk.END).strip()
         new_master_key = self.master_key_path.get("1.0", tk.END).strip()
+        
+        try:
+            iva_rate = float(self.iva_rate_entry.get("1.0", tk.END).strip()) / 100
+        except ValueError:
+            messagebox.showerror("Error de Formato", "La tasa de IVA debe ser un número válido.")
+            return
 
         old_master_key_b64 = os.getenv("MASTER_KEY")
         old_master_key = b64.b64decode(old_master_key_b64).decode('utf-8') if old_master_key_b64 else "admin"
@@ -1585,7 +1699,14 @@ class VentanaConfiguracion(ttk.Frame, VistaBase):
 
         if os.path.exists('.env'):
             new_master_key_b64 = b64.b64encode(new_master_key.encode('utf-8')).decode('utf-8')
-            for key_env, value in [("USERNAME", cimiento.codec(user)), ("PASSWORD", cimiento.codec(clave)), ("CARPETA", carpeta), ("IMAGEN_FONDO", imagen_fondo), ("ICONO_APP", icono_app), ("MASTER_KEY", new_master_key_b64)]:
+            for key_env, value in [
+                ("USERNAME", cimiento.codec(user)), 
+                ("PASSWORD", cimiento.codec(clave)), 
+                ("CARPETA", carpeta), 
+                ("IMAGEN_FONDO", imagen_fondo), 
+                ("ICONO_APP", icono_app), 
+                ("MASTER_KEY", new_master_key_b64),
+                ("IVA_RATE", str(iva_rate))]:
                 set_key(".env", key_env, value)
             
             messagebox.showinfo("Guardado", "Configuración guardada con éxito. Algunos cambios (como el icono o la imagen de fondo) pueden requerir reiniciar la aplicación.")
