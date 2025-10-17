@@ -650,6 +650,22 @@ class CotizacionService:
             c.drawString(0.5 * inch, y_pos_cliente_box + 0.4 * inch, f"Dirección: {cliente_data[2]}")
             c.drawString(0.5 * inch, y_pos_cliente_box + 0.2 * inch, f"Correo: {cliente_data[4]}")
 
+            # --- Dibujar Plano (si aplica) ---
+            # Lógica para extraer medidas del primer producto (ej. "Ventana (1500x1200)")
+            medidas_ventana = (None, None)
+            if detalles:
+                primer_detalle_desc = detalles[0][1] # Descripción del primer item
+                import re
+                match = re.search(r'\((\d+)[xX](\d+)\)', primer_detalle_desc)
+                if match:
+                    ancho = int(match.group(1))
+                    alto = int(match.group(2))
+                    medidas_ventana = (ancho, alto)
+            
+            # Llamada a la función de dibujo
+            CotizacionService._dibujar_plano_ventana(c, width, height, medidas_ventana)
+
+
             # --- Tabla de Detalles ---
             y_pos = y_pos_cliente_box - 0.5 * inch
             c.setFont("Helvetica-Bold", 11)
