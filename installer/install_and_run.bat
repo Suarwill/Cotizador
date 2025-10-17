@@ -16,7 +16,7 @@ echo.
 echo Copiando archivos de la aplicacion...
 REM Asumimos que el script esta en una carpeta 'installer' y los archivos estan un nivel arriba.
 copy "..\main.py" "%INSTALL_DIR%\" > nul
-copy "..\requirements.txt" "%INSTALL_DIR%\" > nul
+copy "requirements.txt" "%INSTALL_DIR%\" > nul
 xcopy "..\assets" "%INSTALL_DIR%\assets\" /E /I /Y > nul
 echo Archivos copiados.
 
