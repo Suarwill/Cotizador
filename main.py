@@ -383,9 +383,9 @@ class CSVRepository:
 
 # --- Repositorios de Datos ---
 clientes_repo = CSVRepository("data_clientes.csv", ["Nombre", "RUT", "Direccion", "Telefono", "Correo"], encrypted=True)
-insumos_repo = CSVRepository("data_productos.csv", ["Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "Costo", "Precio"])
+insumos_repo = CSVRepository("data_productos.csv", ["Codigo", "Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "Costo", "Precio"])
 cotizaciones_repo = CSVRepository("data_cotizaciones.csv", ["Nro", "Fecha", "Estado", "Cliente", "PrecioTotal"])
-detalles_repo = CSVRepository("data_cotizaciones_detalle.csv", ["Nro_Cotizacion", "Cantidad", "Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "PrecioUnitario", "Subtotal"])
+detalles_repo = CSVRepository("data_cotizaciones_detalle.csv", ["Nro_Cotizacion", "Cantidad", "Codigo", "Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "PrecioUnitario", "Subtotal"])
 
 class ClienteService:
     @staticmethod
@@ -436,17 +436,17 @@ class InsumoService:
 
     @staticmethod
     def guardar(datos_insumo):
-        desc1_nuevo = datos_insumo[0]
+        codigo_nuevo = datos_insumo[0]
         insumos_existentes = insumos_repo.read_all(skip_header=False)
 
         if not insumos_existentes:
             return insumos_repo.write_all([datos_insumo])
 
         insumos_existentes.pop(0) # Quitar cabecera
-
+        
         for i, insumo in enumerate(insumos_existentes):
-            if insumo and insumo[0] == desc1_nuevo:
-                respuesta = messagebox.askyesno("Insumo Duplicado", f"El insumo '{desc1_nuevo}' ya existe. ¿Desea reemplazar los datos?")
+            if insumo and insumo[0] == codigo_nuevo:
+                respuesta = messagebox.askyesno("Insumo Duplicado", f"El insumo con código '{codigo_nuevo}' ya existe. ¿Desea reemplazar los datos?")
                 if respuesta:
                     insumos_existentes[i] = datos_insumo
                     return insumos_repo.write_all(insumos_existentes)
@@ -455,8 +455,8 @@ class InsumoService:
         return insumos_repo.append_row(datos_insumo)
 
     @staticmethod
-    def borrar(desc1_insumo):
-        insumos_actuales = [i for i in InsumoService.cargar_todos() if i and i[0] != desc1_insumo]
+    def borrar(codigo_insumo):
+        insumos_actuales = [i for i in InsumoService.cargar_todos() if i and i[0] != codigo_insumo]
         return insumos_repo.write_all(insumos_actuales)
 
 class CotizacionService:
@@ -470,8 +470,11 @@ class CotizacionService:
         detalles_filtrados = []
         for row in detalles_completos:
             if row and row[0] == str(nro_cotizacion):
-                # (Cantidad, Descripcion1, PrecioUnitario, Subtotal)
-                vista_detalle = (row[1], row[2], row[6], row[7])
+                # Concatenar descripción para la vista
+                # Nro, Cant, Codigo, Desc1, Desc2, Desc3, Unidad, P.Unit, Subtotal
+                #  0 ,  1  ,   2   ,   3  ,   4  ,   5  ,    6   ,   7    ,    8
+                desc_concatenada = f"[{row[2]}] {row[3]} {row[4]} {row[5]}".strip()
+                vista_detalle = (row[1], desc_concatenada, row[7], row[8])
                 detalles_filtrados.append(vista_detalle)
         return detalles_filtrados
 
@@ -497,12 +500,13 @@ class CotizacionService:
                 datos_insumo_completos = valores_vista['insumo_completo']
                 detalle_fila = [
                     nro_cotizacion,
-                    valores_vista['vista'][0],  # Cantidad
-                    datos_insumo_completos[0],  # Desc1
-                    datos_insumo_completos[1],  # Desc2
-                    datos_insumo_completos[2],  # Desc3
-                    datos_insumo_completos[3],  # Unidad
-                    float(valores_vista['vista'][2]),  # Precio Unitario
+                    valores_vista['vista'][0],       # Cantidad
+                    datos_insumo_completos[0],       # Codigo
+                    datos_insumo_completos[1],       # Desc1
+                    datos_insumo_completos[2],       # Desc2
+                    datos_insumo_completos[3],       # Desc3
+                    datos_insumo_completos[4],       # Unidad
+                    float(valores_vista['vista'][2]),# Precio Unitario
                     float(valores_vista['vista'][3])   # Subtotal
                 ]
                 writer.writerow(detalle_fila)
@@ -532,9 +536,10 @@ class CotizacionService:
         # Añade los nuevos detalles de la cotización actual
         for item_id, valores_vista in detalles.items():
             datos_insumo_completos = valores_vista['insumo_completo']
-            detalle_fila = [nro_cotizacion, valores_vista['vista'][0], datos_insumo_completos[0], 
-                            datos_insumo_completos[1], datos_insumo_completos[2], datos_insumo_completos[3], 
-                            float(valores_vista['vista'][2]), float(valores_vista['vista'][3])]
+            detalle_fila = [nro_cotizacion, valores_vista['vista'][0], datos_insumo_completos[0], # Cant, Codigo
+                            datos_insumo_completos[1], datos_insumo_completos[2], datos_insumo_completos[3], # Desc 1,2,3
+                            datos_insumo_completos[4], float(valores_vista['vista'][2]), float(valores_vista['vista'][3])] # Unidad, P.Unit, Subtotal
+
             detalles_filtrados.append(detalle_fila)
 
         return detalles_repo.write_all(detalles_filtrados)
@@ -835,7 +840,7 @@ class VentanaClientes(ttk.Frame, VistaBase):
 
         self.crear_etiqueta(datos_frame, "Nombre:", 0, 0)
         self.datacliente = self.crear_entrada_texto(datos_frame, 30, 1)
-        self.datacliente.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        self.datacliente.grid(row=0, column=1, columnspan=3, padx=5, pady=5, sticky="ew")
 
         self.crear_etiqueta(datos_frame, "RUT:", 1, 0)
         self.datarut = self.crear_entrada_texto(datos_frame, 20, 1)
@@ -849,9 +854,9 @@ class VentanaClientes(ttk.Frame, VistaBase):
         self.datatelefono = self.crear_entrada_texto(datos_frame, 20, 1)
         self.datatelefono.grid(row=3, column=1, padx=5, pady=5, sticky="ew")
 
-        self.crear_etiqueta(datos_frame, "Correo:", 4, 0)
+        self.crear_etiqueta(datos_frame, "Correo:", 3, 2)
         self.datacorreo = self.crear_entrada_texto(datos_frame, 30, 1)
-        self.datacorreo.grid(row=4, column=1, padx=5, pady=5, sticky="ew")
+        self.datacorreo.grid(row=3, column=3, padx=5, pady=5, sticky="ew")
 
         datos_frame.grid_columnconfigure(1, weight=1)
 
@@ -1093,11 +1098,11 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
             return
         
         cantidad = int(cantidad_str)
-        precio_unitario = float(self.insumo_seleccionado[5]) # Columna Precio
+        precio_unitario = float(self.insumo_seleccionado[6]) # Columna Precio
         subtotal = cantidad * precio_unitario
 
         # Añadir al Treeview
-        descripcion_completa = self.insumo_seleccionado[0]
+        descripcion_completa = f"[{self.insumo_seleccionado[0]}] {self.insumo_seleccionado[1]} {self.insumo_seleccionado[2]} {self.insumo_seleccionado[3]}".strip()
         item_data = (cantidad, descripcion_completa, f"{precio_unitario:.2f}", f"{subtotal:.2f}")
         item_id = self.tree_detalle.insert("", "end", values=item_data, tags=('item',))
         
@@ -1174,8 +1179,11 @@ class VentanaCrearCotizacion(ttk.Frame, VistaBase):
 
         for detalle_fila in detalles_repo.read_all():
             if detalle_fila and detalle_fila[0] == str(self.nro_cotizacion_editando):
+                # Concatenar descripción para la vista
+                desc_concatenada = f"[{detalle_fila[2]}] {detalle_fila[3]} {detalle_fila[4]} {detalle_fila[5]}".strip()
+
                 # Reconstruir la tupla de la vista del detalle
-                vista_detalle = (detalle_fila[1], detalle_fila[2], detalle_fila[6], detalle_fila[7])
+                vista_detalle = (detalle_fila[1], desc_concatenada, detalle_fila[7], detalle_fila[8])
                 item_id = self.tree_detalle.insert("", "end", values=vista_detalle)
 
                 # Encontrar el insumo completo correspondiente para guardarlo en detalle_data
@@ -1325,33 +1333,39 @@ class VentanaInsumos(ttk.Frame, VistaBase):
         self.grid_columnconfigure(0, weight=1)
         datos_frame.grid_columnconfigure(1, weight=1) # Permitir que la columna 1 se expanda
 
-        self.crear_etiqueta(datos_frame, "Descripción 1:", 0, 0)
+        self.crear_etiqueta(datos_frame, "Código:", 0, 0)
+        self.datacodigo = self.crear_entrada_texto(datos_frame, 40, 1)
+        self.datacodigo.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+
+        self.crear_etiqueta(datos_frame, "Descripción 1:", 1, 0)
         self.datadesc1 = self.crear_entrada_texto(datos_frame, 40, 1)
-        self.datadesc1.grid(row=0, column=1, columnspan=3, padx=5, pady=5, sticky="ew")
+        self.datadesc1.grid(row=1, column=1, columnspan=3, padx=5, pady=5, sticky="ew")
 
-        self.crear_etiqueta(datos_frame, "Descripción 2:", 1, 0)
+        self.crear_etiqueta(datos_frame, "Descripción 2:", 2, 0)
         self.datadesc2 = self.crear_entrada_texto(datos_frame, 40, 1)
-        self.datadesc2.grid(row=1, column=1, columnspan=3, padx=5, pady=5, sticky="ew")
+        self.datadesc2.grid(row=2, column=1, columnspan=3, padx=5, pady=5, sticky="ew")
 
-        self.crear_etiqueta(datos_frame, "Descripción 3:", 2, 0)
+        self.crear_etiqueta(datos_frame, "Descripción 3:", 3, 0)
         self.datadesc3 = self.crear_entrada_texto(datos_frame, 40, 1)
-        self.datadesc3.grid(row=2, column=1, columnspan=3, padx=5, pady=5, sticky="ew")
+        self.datadesc3.grid(row=3, column=1, columnspan=3, padx=5, pady=5, sticky="ew")
 
-        self.crear_etiqueta(datos_frame, "Unidad:", 3, 0)
+        self.crear_etiqueta(datos_frame, "Unidad:", 4, 0)
         self.dataunidad = self.crear_entrada_texto(datos_frame, 40, 1)
-        self.dataunidad.grid(row=3, column=1, padx=5, pady=5, sticky="ew")
+        self.dataunidad.grid(row=4, column=1, padx=5, pady=5, sticky="ew")
 
-        self.crear_etiqueta(datos_frame, "Costo:", 4, 0)
+        self.crear_etiqueta(datos_frame, "Costo:", 5, 0)
         self.datacosto = self.crear_entrada_texto(datos_frame, 40, 1)
-        self.datacosto.grid(row=4, column=1, padx=5, pady=5, sticky="ew")
+        self.datacosto.grid(row=5, column=1, padx=5, pady=5, sticky="ew")
 
-        self.crear_etiqueta(datos_frame, "Precio:", 4, 2)
+        self.crear_etiqueta(datos_frame, "Precio:", 5, 2)
         self.dataprecio = self.crear_entrada_texto(datos_frame, 40, 1)
-        self.dataprecio.grid(row=4, column=3, padx=5, pady=5, sticky="ew")
+        self.dataprecio.grid(row=5, column=3, padx=5, pady=5, sticky="ew")
+
+
 
         # --- Frame de Acciones ---
         acciones_frame = ttk.LabelFrame(self, text="Acciones")
-        acciones_frame.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
+        acciones_frame.grid(row=2, column=0, padx=20, pady=10, sticky="nsew")
         acciones_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         ttk.Button(acciones_frame, text="Guardar", command=self.guardar).grid(row=0, column=0, padx=10, pady=10, sticky="ew")
@@ -1360,13 +1374,14 @@ class VentanaInsumos(ttk.Frame, VistaBase):
         ttk.Button(acciones_frame, text="Limpiar", command=self.limpiar_campos).grid(row=0, column=3, padx=10, pady=10, sticky="ew")
 
     def guardar(self):
-        desc1 = self.datadesc1.get("1.0", tk.END).strip()
-        if not desc1:
-            messagebox.showwarning("Campo requerido", "La 'Descripción 1' es obligatoria.")
+        codigo = self.datacodigo.get("1.0", tk.END).strip()
+        if not codigo:
+            messagebox.showwarning("Campo requerido", "El 'Código' es obligatorio.")
             return
 
         datos_insumo = [
-            desc1,
+            codigo,
+            self.datadesc1.get("1.0", tk.END).strip(),
             self.datadesc2.get("1.0", tk.END).strip(),
             self.datadesc3.get("1.0", tk.END).strip(),
             self.dataunidad.get("1.0", tk.END).strip(),
@@ -1382,25 +1397,25 @@ class VentanaInsumos(ttk.Frame, VistaBase):
             pass
 
     def borrar_insumo(self):
-        desc1_a_borrar = self.datadesc1.get("1.0", tk.END).strip()
-        if not desc1_a_borrar:
-            messagebox.showwarning("Atención", "No hay ningún insumo cargado para borrar (el campo 'Descripción 1' está vacío).")
+        codigo_a_borrar = self.datacodigo.get("1.0", tk.END).strip()
+        if not codigo_a_borrar:
+            messagebox.showwarning("Atención", "No hay ningún insumo cargado para borrar (el campo 'Código' está vacío).")
             return
 
-        confirmar = messagebox.askyesno("Confirmar Borrado", f"¿Está seguro de que desea eliminar el insumo '{desc1_a_borrar}'? Esta acción no se puede deshacer.")
+        confirmar = messagebox.askyesno("Confirmar Borrado", f"¿Está seguro de que desea eliminar el insumo con código '{codigo_a_borrar}'? Esta acción no se puede deshacer.")
 
         if confirmar:
-            if InsumoService.borrar(desc1_a_borrar):
+            if InsumoService.borrar(codigo_a_borrar):
                 messagebox.showinfo("Éxito", "Insumo eliminado correctamente.")
                 self.limpiar_campos()
 
     def limpiar_campos(self):
-        for widget in [self.datadesc1, self.datadesc2, self.datadesc3, self.dataunidad, self.datacosto, self.dataprecio]:
+        for widget in [self.datacodigo, self.datadesc1, self.datadesc2, self.datadesc3, self.dataunidad, self.datacosto, self.dataprecio]:
             widget.delete("1.0", tk.END)
 
     def _cargar_insumo_seleccionado(self, datos_insumo):
         self.limpiar_campos()
-        widgets = [self.datadesc1, self.datadesc2, self.datadesc3, self.dataunidad, self.datacosto, self.dataprecio]
+        widgets = [self.datacodigo, self.datadesc1, self.datadesc2, self.datadesc3, self.dataunidad, self.datacosto, self.dataprecio]
         for widget, dato in zip(widgets, datos_insumo):
             widget.insert("1.0", dato)
 
@@ -1413,7 +1428,7 @@ class VentanaSeleccionarInsumo(Ventana):
         super().__init__("Seleccionar Insumo", 800, 400, 2, ventana_padre)
         self.callback = callback_seleccion
 
-        columnas = ("Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "Costo", "Precio")
+        columnas = ("Codigo", "Descripcion1", "Descripcion2", "Descripcion3", "Unidad", "Costo", "Precio")
         self.tree = ttk.Treeview(self.ventana, columns=columnas, show='headings')
         for col in columnas:
             self.tree.heading(col, text=col)
